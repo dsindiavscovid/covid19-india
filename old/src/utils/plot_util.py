@@ -1,8 +1,8 @@
 from matplotlib import pyplot as plt
 from kneed import DataGenerator, KneeLocator
-import pandas as pd
 
 from utils.metrics_util import evaluate
+import pandas as pd
 
 
 def plot(summary_df, r0):

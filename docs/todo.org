@@ -1,0 +1,17 @@
+* Major Refactoring
+* Minor Refactoring
+** model_wrapper: read default configs from config file
+* Adding new models etc
+** When adding new variables      : udpate entities/forecast_variables
+** When adding new parameter type : update entities/loss_function
+** When adding new metric         : update entities/metric_name
+** When adding new models         : update entities/model_class
+** 
+* Notes
+** entities: Has various entities that need to be added
+** model_wrappers: wrappers for models
+*** specifically: model_factory : helps creates models
+*** .             ModelWrapperBase in base          : is abstract base class for models
+***               seir          : base seir model
+*** .             seihrd        : base seihrd model
+*** 
