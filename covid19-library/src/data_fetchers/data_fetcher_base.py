@@ -26,6 +26,7 @@ class DataFetcherBase(ABC):
         region_type : Type of region (city, district, state)
         region_name : List of regions
         """
+        assert (isinstance(region_name, list))
         df_list = []
 
         for region in region_name:
