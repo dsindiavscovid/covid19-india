@@ -5,12 +5,10 @@ from entities.intervention_variable import InputType
 from entities.forecast_variables import ForecastVariable
 from entities.model_class import ModelClass
 from entities.loss_function import LossFunction
-from entities.data_source import DataSource
 
 
 class BaseConfig(BaseModel):
-    data_source: str = DataSource.tracker_district_daily
-    region_name: List[str]
+    region_name: str
     region_type: str
     model_class: ModelClass
     model_parameters: dict
