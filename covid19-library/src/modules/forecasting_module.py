@@ -48,17 +48,17 @@ class ForecastingModule(object):
 
         preddf.insert(0, 'run_day', run_day)
         preddf.insert(1, 'Region Type', region_type)
-        preddf.insert(2, 'Region', region_name)
+        preddf.insert(2, 'Region', " ".join(region_name))
         preddf.insert(3, 'Model', self._model.__class__.__name__)
         preddf.insert(4, 'Error', "MAPE")
         preddf.insert(5, "Error Value", error * 100)
 
         return preddf
 
-    def predict_for_region(self, region_type, region_name, run_day, forecast_start_date,
-                           forecast_end_date):
-        observations = DataFetcherModule.get_observations_for_region(region_type, region_name)
-        region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name)
+    def predict_for_region(self, data_source, region_type, region_name, run_day, forecast_start_date,
+                           forecast_end_date,):
+        observations = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source)
+        region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source)
         return self.predict(region_type, region_name, region_metadata, observations, run_day,
                             forecast_start_date,
                             forecast_end_date)
@@ -72,7 +72,7 @@ class ForecastingModule(object):
     @staticmethod
     def from_config(config: ForecastingModuleConfig):
         forecasting_module = ForecastingModule(config.model_class, config.model_parameters)
-        predictions = forecasting_module.predict_for_region(config.region_type, config.region_name,
+        predictions = forecasting_module.predict_for_region(config.data_source, config.region_type, config.region_name,
                                                             config.run_day, config.forecast_start_date,
                                                             config.forecast_end_date)
         if config.output_filepath is not None:
