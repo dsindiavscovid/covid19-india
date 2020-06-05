@@ -76,6 +76,7 @@ def get_data_from_db(district):
     dataframes = get_athena_dataframes()
     df_result = copy.copy(dataframes['covid_case_summary'])
     df_result = df_result[df_result['district'] == district.lower()]
+    df_result = df_result.dropna(subset=['date'])
     df_result['date'] = pd.to_datetime(df_result['date']).apply(lambda x: x.strftime("%-m/%-d/%y"))
 
     del df_result['state']
