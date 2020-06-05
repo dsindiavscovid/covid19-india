@@ -25,4 +25,3 @@ class DataFetcherModule(object):
 
 if __name__ == "__main__":
     pass
-    
