@@ -7,3 +7,4 @@ class DataSource(str, enum.Enum):
     tracker_district_daily = "tracker_district_daily"
     direct_csv = "direct_csv"
     official_data = "official_data"
+    rootnet_stats_history = "rootnet_stats_history"
