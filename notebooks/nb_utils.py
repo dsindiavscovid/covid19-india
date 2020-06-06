@@ -71,7 +71,7 @@ def train_eval(region, region_type,
         #TODO: Need to add hooks to consume data from appropriate source
 
         Run train and evalation for (basic) SEIR model.
-    
+
     Arguments:
         region, region_type : Region info corresponding to the run
         train1_start_date, train1_end_date : Train1 durations
@@ -119,16 +119,16 @@ def train_eval(region, region_type,
     train_config['train_start_date'] = train1_start_date
     train_config['train_end_date'] = train1_end_date
     train_config['search_parameters']['max_evals'] = max_evals
-    
+
     # model parameters
     model_params = dict()
     model_params['region'] = region
     model_params['region_type'] = region_type
     model_params['model_type'] = train_config['model_class']
-    
+
     train1_model_params = deepcopy(model_params)
     train2_model_params = deepcopy(model_params)
-       
+
     if mlflow_log:
         train_config['output_filepath'] = 'train1_output.json'
     else:
@@ -137,7 +137,7 @@ def train_eval(region, region_type,
 
     train_module_config = TrainingModuleConfig.parse_obj(train_config)
     trainResults = TrainingModule.from_config(train_module_config)
-    
+
     train1MAPE = 0
     train1RMSLE = 0
     for metric in trainResults['train_metric_results']:

@@ -1,4 +1,28 @@
 * Major Refactoring
+** To Understand
+     F  T  R
+*** [x][ ][ ] driver.py
+*** [x][ ][ ] base_config.py: default configs for various entities
+*** [x][ ][ ] entities/forecast_variable.py: Just all forecast variables
+*** [x][ ][ ] entities/loss_func, metric-names, model-class: all those entities
+*** [x][ ][ ] model_params.json : Is this ip/op ?, seems like both or just output
+*** [x][ ][ ] base.py
+*** [x][ ][ ] model_factory.py
+*** [x][ ][ ] files in config, training has extra stuff like loss_func etc, forecast has extra vars
+*** [x][ ][ ] data
+              -> *observations*.csv: region level data
+              -> pop.csv           : just pop data
+              -> regional_metadata : gen version of pop.csv
+*** [x][ ][ ] output
+              -> seif_forecast.csv : just params
+              -> self_forecast2.csv: prediction for dates
+*** [ ][ ][ ] seir.py
+*** [ ][ ][ ] seihrd.py
+*** [ ][ ][ ] SEIHRD_experiments, SEIHRD-Scenario
+*** [ ][ ][ ] nb_utils.py
+*** [ ][ ][ ]
+*** [ ][ ][ ]
+*** [ ][ ][ ] Generalized SEIHRD Model
 * Minor Refactoring
 ** model_wrapper: read default configs from config file
 * Adding new models etc
