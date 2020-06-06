@@ -17,18 +17,20 @@ class ForecastingModule(object):
 
     def predict(self, region_type: str, region_name: str, region_metadata: dict, region_observations: pd.DataFrame,
                 run_day: str, forecast_start_date: str,
-                forecast_end_date: str):
+                forecast_end_date: str, latent_information):
         predictions_df = self._model.predict(region_metadata, region_observations, run_day, forecast_start_date,
-                                             forecast_end_date)
+                                             forecast_end_date, latent_information['latent_variables'],
+                                             latent_information['latent_on'])
         predictions_df = convert_to_nhu_format(predictions_df, region_type, region_name, self._model_parameters['MAPE'])
         return predictions_df.to_json()
 
     def predict_old_format(self, region_type: str, region_name: str, region_metadata: dict,
                            region_observations: pd.DataFrame,
                            run_day: str, forecast_start_date: str,
-                           forecast_end_date: str):
+                           forecast_end_date: str, latent_information):
         predictions_df = self._model.predict(region_metadata, region_observations, run_day, forecast_start_date,
-                                             forecast_end_date)
+                                             forecast_end_date, latent_information['latent_variables'],
+                                             latent_information['latent_on'])
         predictions_df = self.convert_to_old_required_format(run_day, predictions_df, region_type, region_name)
         return predictions_df.to_json()
 
@@ -56,12 +58,12 @@ class ForecastingModule(object):
         return preddf
 
     def predict_for_region(self, data_source, region_type, region_name, run_day, forecast_start_date,
-                           forecast_end_date,):
+                           forecast_end_date, latent_information):
         observations = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source)
         region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source)
         return self.predict(region_type, region_name, region_metadata, observations, run_day,
                             forecast_start_date,
-                            forecast_end_date)
+                            forecast_end_date, latent_information)
 
     @staticmethod
     def from_config_file(config_file_path):
@@ -74,7 +76,7 @@ class ForecastingModule(object):
         forecasting_module = ForecastingModule(config.model_class, config.model_parameters)
         predictions = forecasting_module.predict_for_region(config.data_source, config.region_type, config.region_name,
                                                             config.run_day, config.forecast_start_date,
-                                                            config.forecast_end_date)
+                                                            config.forecast_end_date, config.latent_information)
         if config.output_filepath is not None:
             predictions.to_csv(config.output_filepath, index=False)
         return predictions

@@ -1,0 +1,81 @@
+{
+    "best_params": {
+        "active_ratio": 0.717080244279308,
+        "deceased_ratio": 0.9676558195989353,
+        "exposed_ratio": 0.41728977795718214,
+        "hospitalization_period": 19.976238982229432,
+        "infectious_period": 8.95064302459311,
+        "r0": 0.6647295655013186
+    },
+    "best_loss": 105.49305382566762,
+    "latent_params": {
+        "Latent_exposed_ratio": {
+            "5/2/20": 0.41728977795718214,
+            "5/9/20": 0.2826319387221917
+        },
+        "Latent_active_ratio": {
+            "5/2/20": 0.717080244279308,
+            "5/9/20": 0.456737460037788
+        }
+    },
+    "model_parameters": {
+        "incubation_period": 5,
+        "active_ratio": 0.717080244279308,
+        "deceased_ratio": 0.9676558195989353,
+        "exposed_ratio": 0.41728977795718214,
+        "hospitalization_period": 19.976238982229432,
+        "infectious_period": 8.95064302459311,
+        "r0": 0.6647295655013186,
+        "Latent_exposed_ratio": {
+            "5/2/20": 0.41728977795718214,
+            "5/9/20": 0.2826319387221917
+        },
+        "Latent_active_ratio": {
+            "5/2/20": 0.717080244279308,
+            "5/9/20": 0.456737460037788
+        },
+        "MAPE": 105.49305382566762
+    },
+    "train_metric_results": [
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "confirmed",
+                    "weight": 1.0
+                }
+            ],
+            "value": 13.567615192311804
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "hospitalized",
+                    "weight": 1.0
+                }
+            ],
+            "value": 29.423931391369184
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "recovered",
+                    "weight": 1.0
+                }
+            ],
+            "value": 61.327855744681436
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "deceased",
+                    "weight": 1.0
+                }
+            ],
+            "value": 317.652812974308
+        }
+    ]
+}

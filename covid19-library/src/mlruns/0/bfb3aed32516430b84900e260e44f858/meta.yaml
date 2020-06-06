@@ -1,0 +1,15 @@
+artifact_uri: file:///Users/harsh.maheshwari/Desktop/covid-forecasting/gitRefactorGeneral6June/covid19-indiaStaging/covid19-library/src/mlruns/0/bfb3aed32516430b84900e260e44f858/artifacts
+end_time: 1591449928460
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: bfb3aed32516430b84900e260e44f858
+run_uuid: bfb3aed32516430b84900e260e44f858
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1591449928410
+status: 4
+tags: []
+user_id: harsh.maheshwari

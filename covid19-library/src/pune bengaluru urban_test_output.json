@@ -1,0 +1,64 @@
+[
+    {
+        "metric_name": "mape",
+        "variable_weights": [
+            {
+                "variable": "confirmed",
+                "weight": 0.25
+            },
+            {
+                "variable": "recovered",
+                "weight": 0.25
+            },
+            {
+                "variable": "deceased",
+                "weight": 0.25
+            },
+            {
+                "variable": "hospitalized",
+                "weight": 0.25
+            }
+        ],
+        "value": 140.056094811691
+    },
+    {
+        "metric_name": "mape",
+        "variable_weights": [
+            {
+                "variable": "confirmed",
+                "weight": 1.0
+            }
+        ],
+        "value": 50.71616148374276
+    },
+    {
+        "metric_name": "mape",
+        "variable_weights": [
+            {
+                "variable": "hospitalized",
+                "weight": 1.0
+            }
+        ],
+        "value": 1.4222102523120703
+    },
+    {
+        "metric_name": "mape",
+        "variable_weights": [
+            {
+                "variable": "recovered",
+                "weight": 1.0
+            }
+        ],
+        "value": 6.428507909588569
+    },
+    {
+        "metric_name": "mape",
+        "variable_weights": [
+            {
+                "variable": "deceased",
+                "weight": 1.0
+            }
+        ],
+        "value": 501.6574996011206
+    }
+]

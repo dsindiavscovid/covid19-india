@@ -20,7 +20,7 @@ class ScenarioForecastingModule(object):
         self._model = ModelFactory.get_intervention_enabled_model(model_class, model_parameters)
 
     def predict(self, region_type: str, region_name: str, region_metadata: dict, region_observations: pd.DataFrame,
-                run_day: str, start_date: str, input_type: InputType, time_intervals: List[ForecastTimeInterval]):
+                run_day: str, start_date: str, input_type: InputType, time_intervals: List[ForecastTimeInterval], latent_information):
         """
                 method calls predict method for model using region_metadata and region_observations
                 @param region_observations: observations as fetched using data fetcher module
@@ -41,7 +41,7 @@ class ScenarioForecastingModule(object):
             intervention_map = time_interval.get_interventions_map()
             predictions = self._model.predict_for_scenario(input_type, intervention_map, region_metadata,
                                                            initial_observations, run_day, start_date,
-                                                           time_interval.end_date)
+                                                           time_interval.end_date, latent_information['latent_variables'], latent_information['latent_on'])
             predictions_list.append(predictions)
             ##setting run day, start date, initial_observations for next interval
             initial_observations = convert_to_initial_observations(predictions)
@@ -53,7 +53,7 @@ class ScenarioForecastingModule(object):
         return predictions_df
 
     def predict_for_region(self, region_type: str, region_name: str, run_day: str, start_date: str,
-                           input_type: InputType, time_intervals: List[ForecastTimeInterval]):
+                           input_type: InputType, time_intervals: List[ForecastTimeInterval], latent_information):
         """
         method downloads data using data fetcher module and then run predict on that dataset.
         @param region_type: region_type supported by data_fetcher module
@@ -67,7 +67,7 @@ class ScenarioForecastingModule(object):
         observations = DataFetcherModule.get_observations_for_region(region_type, region_name)
         region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name)
         return self.predict(region_type, region_name, region_metadata, observations, run_day,
-                            start_date, input_type, time_intervals)
+                            start_date, input_type, time_intervals, latent_information)
 
     @staticmethod
     def from_config_file(config_file_path: str):
@@ -89,7 +89,7 @@ class ScenarioForecastingModule(object):
         forecasting_module = ScenarioForecastingModule(config.model_class, config.model_parameters)
         predictions = forecasting_module.predict_for_region(config.region_type, config.region_name,
                                                             config.run_day, config.start_date, config.input_type,
-                                                            config.time_intervals)
+                                                            config.time_intervals, config.latent_information)
         if config.output_filepath is not None:
             predictions.to_csv(config.output_filepath, index=False)
         return predictions

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Union
 
 from entities.intervention_variable import InputType
 from entities.forecast_variables import ForecastVariable
@@ -15,6 +15,7 @@ class BaseConfig(BaseModel):
     model_class: ModelClass
     model_parameters: dict
     output_filepath: str = None
+    latent_information: Dict[str, Union[List[ForecastVariable], ForecastVariable]]
 
 
 class TrainingModuleConfig(BaseConfig):
