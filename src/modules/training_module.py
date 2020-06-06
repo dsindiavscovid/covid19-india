@@ -29,7 +29,6 @@ class TrainingModule(object):
                 search_space[k] = hp.uniform(k, v[0], v[1])
             result = hyperparam_tuning(objective, search_space,
                                        search_parameters.get("max_evals", 100))
-            ##TODO: harsh to check this
             run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime(
                 "%-m/%-d/%y")
             latent_params = self._model.get_latent_params(region_metadata, region_observations, run_day,
@@ -40,7 +39,7 @@ class TrainingModule(object):
         model_params.update(latent_params["latent_params"])
         model_params.update(result["best_params"])
         model_params["MAPE"] = result["best_loss"]
-        result["model_parameters"]= model_params
+        result["model_parameters"] = model_params
         return result
 
     def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
@@ -52,17 +51,17 @@ class TrainingModule(object):
         metrics_result = ModelEvaluator.evaluate_for_forecast(region_observations, predict_df, [loss_function])
         return metrics_result[0]["value"]
 
-    def train_for_region(self, region_type, region_name, train_start_date, train_end_date,
+    def train_for_region(self, data_source, region_type, region_name, train_start_date, train_end_date,
                          search_space, search_parameters, train_loss_function):
-        observations = DataFetcherModule.get_observations_for_region(region_type, region_name)
-        region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name)
+        observations = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source)
+        region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source)
         return self.train(region_metadata, observations, train_start_date, train_end_date,
                           search_space, search_parameters, train_loss_function)
 
     @staticmethod
     def from_config(config: TrainingModuleConfig):
         training_module = TrainingModule(config.model_class, config.model_parameters)
-        results = training_module.train_for_region(config.region_type, config.region_name,
+        results = training_module.train_for_region(config.data_source, config.region_type, config.region_name,
                                                    config.train_start_date,
                                                    config.train_end_date,
                                                    config.search_space,
@@ -72,9 +71,8 @@ class TrainingModule(object):
         config.model_parameters.update(
             results["latent_params"])
         model_evaluator = ModelEvaluator(config.model_class, config.model_parameters)
-        ##TODO harsh to check this
         run_day = (datetime.strptime(config.train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
-        results["train_metric_results"] = model_evaluator.evaluate_for_region(config.region_type, config.region_name,
+        results["train_metric_results"] = model_evaluator.evaluate_for_region(config.data_source, config.region_type, config.region_name,
                                                                               run_day,
                                                                               config.train_start_date,
                                                                               config.train_end_date,
