@@ -1,5 +1,5 @@
 {
-  "region_name": "bengaluru",
+  "region_name": ["bengaluru"],
   "region_type": "district",
   "train_start_date": "3/22/20",
   "train_end_date": "4/1/20",
