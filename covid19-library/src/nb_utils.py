@@ -114,6 +114,10 @@ def train_eval(region, region_type,
     """
     
     # Save metrics and params for logging
+    
+    if not isinstance(region, list):
+        region = [region]
+    
     params = dict()
     metrics = dict()
 
@@ -276,6 +280,10 @@ def get_observations_in_range(data_source, region_name, region_type,
         Return a list of counts of obs_type cases
         from the region in the specified date range.
     """
+    
+    if not isinstance(region, list):
+        region = [region]
+    
     observations = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source)
     observations_df = observations[observations['observation'] == obs_type]
     
@@ -350,6 +358,10 @@ def train_eval_forecast(region, region_type,
         we first check if the forecast_end_date is prior to the current date
         so that we have actual_confirmed cases and then plot the predictions.
     """
+    
+    if not isinstance(region, list):
+        region = [region]
+    
     params, metrics, model_params = train_eval(region, region_type,
                                                train1_start_date, train1_end_date,
                                                train2_start_date, train2_end_date,
