@@ -1,8 +1,4 @@
-from entities.data_source import DataSource
-from data_fetchers.data_fetcher_base import DataFetcherBase
-
 import copy
-import numpy as np
 import pandas as pd
 
 from pathlib import Path
@@ -10,16 +6,22 @@ from pathlib import Path
 from pyathena import connect
 from pyathena.pandas_cursor import PandasCursor
 
+from data_fetchers.data_fetcher_base import DataFetcherBase
+
+SCHEMA_NAME = 'wiai-covid-data'
+
+
 def create_connection(pyathena_rc_path=None):
     """Creates SQL Server connection using AWS Athena credentials
-    Keyword Arguments:
-        pyathena_rc_path {str} -- [Path to the PyAthena RC file with the AWS Athena variables] (default: {None})
+
+    Args:
+        pyathena_rc_path (str): Path to the PyAthena RC file with the AWS Athena variables (default: None)
+
     Returns:
-        [cursor] -- [Connection Cursor]
+        Connection Cursor
     """
-    if pyathena_rc_path == None:
+    if pyathena_rc_path is None:
         pyathena_rc_path = Path(__file__).parent / "../../../../pyathena/pyathena.rc"
-    SCHEMA_NAME = 'wiai-covid-data'
 
     # Open Pyathena RC file and get list of all connection variables in a processable format
     with open(pyathena_rc_path) as f:
@@ -44,37 +46,48 @@ def create_connection(pyathena_rc_path=None):
                      schema_name=SCHEMA_NAME).cursor(PandasCursor)
     return cursor
 
+
 def get_athena_dataframes(pyathena_rc_path=None):
-    """Creates connection to Athena database and returns all the tables there as a dict of Pandas dataframes
-    Keyword Arguments:
-        pyathena_rc_path {str} -- Path to the PyAthena RC file with the AWS Athena variables 
-        (default: {None})
+    """Creates connection to Athena database and returns all the tables there as a dict of Pandas data frames
+
+    Args:
+        pyathena_rc_path (str): Path to the PyAthena RC file with the AWS Athena variables (default: None)
+
     Returns:
-        dict -- dict where key is str and value is pd.DataFrame
-        The dataframes : 
-        covid_case_summary
-        demographics_details
-        healthcare_capacity
-        testing_summary
+        dict: dict where key is str and value is pd.DataFrame
+            The data frames :
+            covid_case_summary
+            demographics_details
+            healthcare_capacity
+            testing_summary
     """
-    if pyathena_rc_path == None:
+    if pyathena_rc_path is None:
         pyathena_rc_path = Path(__file__).parent / "../../../../pyathena/pyathena.rc"
 
     # Create connection
     cursor = create_connection(pyathena_rc_path)
 
-    # Run SQL SELECT queries to get all the tables in the database as pandas dataframes
-    dataframes = {}
+    # Run SQL SELECT queries to get all the tables in the database as pandas data frames
+    data_frames = {}
     tables_list = cursor.execute('Show tables').as_pandas().to_numpy().reshape(-1, )
     for table in tables_list:
-        dataframes[table] = cursor.execute(
+        data_frames[table] = cursor.execute(
             'SELECT * FROM {}'.format(table)).as_pandas()
     
-    return dataframes
+    return data_frames
+
 
 def get_data_from_db(district):
-    dataframes = get_athena_dataframes()
-    df_result = copy.copy(dataframes['covid_case_summary'])
+    """Gets data frame of case counts for one district
+
+    Args:
+        district (str): name of district
+
+    Returns:
+        pd.DataFrame: data frame of case counts
+    """
+    data_frames = get_athena_dataframes()
+    df_result = copy.copy(data_frames['covid_case_summary'])
     df_result = df_result[df_result['district'] == district.lower()]
     df_result = df_result.dropna(subset=['date'])
     df_result['date'] = pd.to_datetime(df_result['date']).apply(lambda x: x.strftime("%-m/%-d/%y"))
@@ -93,10 +106,10 @@ def get_data_from_db(district):
     df_result.columns = [x if x != 'total' else 'confirmed' for x in df_result.columns]
     df_result = df_result.fillna(0)
 
-    df_result = df_result.rename(columns={'date':'index'})
-    df_result = df_result.set_index('index').transpose().reset_index().rename(columns={'index':"observation"})
-    df_result.insert(0, column = "region_name", value = district.lower().replace(',', ''))
-    df_result.insert(1, column = "region_type", value = "district")
+    df_result = df_result.rename(columns={'date': 'index'})
+    df_result = df_result.set_index('index').transpose().reset_index().rename(columns={'index': "observation"})
+    df_result.insert(0, column="region_name", value=district.lower().replace(',', ''))
+    df_result.insert(1, column="region_type", value="district")
 
     return df_result
 

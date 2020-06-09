@@ -1,9 +1,9 @@
 from entities.data_source import DataSource
-from data_fetchers.data_fetcher_base import DataFetcherBase
 from data_fetchers.tracker_raw import TrackerRaw
 from data_fetchers.tracker_district_daily import TrackerDistrictDaily
 from data_fetchers.official_data import OfficialData
 from data_fetchers.rootnet_stats_history import RootnetStatsHistory
+
 
 class DataFetcherFactory:
 
