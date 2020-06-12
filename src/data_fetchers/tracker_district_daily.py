@@ -15,7 +15,7 @@ def load_observations_data():
     """Returns data frame of district-wise case counts from covid19india.org districts_daily API
 
     Returns:
-        pd.DataFrame: district wise daily cumulative case counts
+        pd.DataFrame: district-wise daily cumulative case counts
     """
 
     # Get raw data from URL

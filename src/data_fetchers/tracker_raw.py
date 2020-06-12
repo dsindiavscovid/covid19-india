@@ -35,6 +35,11 @@ ACTIVE = "active"
 
 @lru_cache(maxsize=3)
 def load_observations_data():
+    """Returns data frame of region-wise case counts from covid19india.org raw_data API
+
+    Returns:
+        pd.DataFrame: region-wise daily cumulative case counts
+    """
     raw_data = []
     for url in raw_data_urls:
         raw_data.extend(get_raw_data_dict(url)["raw_data"])

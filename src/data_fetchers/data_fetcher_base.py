@@ -43,8 +43,8 @@ class DataFetcherBase(ABC):
                 region_name : combined region name
                 region_type : type of region
                 observation : variable observed
-                    (confirmed, hospitalized, recovered, deceased, severity levels if any)
-                date columns : columns of dates (from earliest to most recent date available)
+                    (confirmed, hospitalized, recovered, deceased and severity levels if any)
+                date columns : columns of case counts for each date (from earliest to most recent date available)
         """
         df_list = []
 
