@@ -661,6 +661,7 @@ def plot_m3(train2_model_params, train1_start_date,
     plt.title(train2_model_params['region'])
     plt.ylabel('No of People')
     plt.xlabel('Time')
+    plt.xticks(rotation=90)
     plt.legend()
     plt.grid()
     
