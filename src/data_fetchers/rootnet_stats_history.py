@@ -1,41 +1,61 @@
-import json
 import pandas as pd
-import numpy as np
 from datetime import datetime
 
 from functools import lru_cache
 
-from entities.data_source import DataSource
 from data_fetchers.data_fetcher_base import DataFetcherBase
 from data_fetchers.data_fetcher_utils import get_raw_data_dict
 
-# raw input data from rootnet api
+# Stats history data URL from rootnet.in
 rootnet_stats_history_url = 'https://api.rootnet.in/covid19-in/stats/history'
+
 
 @lru_cache(maxsize=3)
 def load_observations_data():
+    """Returns data frame of state-wise case counts from rootnet stats_history API
+
+    Returns:
+        pd.DataFrame: state-wise daily cumulative case counts
+    """
+
+    # Get raw data from URL
     data = get_raw_data_dict(rootnet_stats_history_url)
+
     df_result = pd.DataFrame()
+
+    # Loop over dictionary of date-wise raw data
     for i, _ in enumerate(data['data']):
+
+        # Get state-wise data for a date
         df_temp = pd.DataFrame.from_dict(data['data'][i]['regional'])
-        df_temp = df_temp.rename(columns={'deaths':'deceased', 'discharged':'recovered'})
+
+        # Rename columns
+        df_temp = df_temp.rename(columns={'deaths': 'deceased', 'discharged': 'recovered'})
+
+        # Compute case counts for required variables
         df_temp['confirmed'] = df_temp['confirmedCasesForeign'] + df_temp['confirmedCasesIndian']
         df_temp['hospitalized'] = df_temp['confirmed'] - df_temp['deceased'] - df_temp['recovered']
         del df_temp['confirmedCasesForeign']
         del df_temp['confirmedCasesIndian']
-        del df_temp['totalConfirmed'] # check
-        df_temp.set_index('loc', inplace = True)   
+        del df_temp['totalConfirmed']
+
+        # Convert temporary data frame to required format and add a new column to final data frame
+        df_temp.set_index('loc', inplace=True)   
         df_temp = df_temp.stack()
-        df_temp = df_temp.rename_axis(['state','observation'])
-        df_result = pd.concat([df_result, df_temp], axis = 1)
+        df_temp = df_temp.rename_axis(['state', 'observation'])
+        df_result = pd.concat([df_result, df_temp], axis=1)
         date = datetime.strptime(data['data'][i]['day'], '%Y-%m-%d').strftime("%-m/%-d/%y")
-        df_result = df_result.rename(columns={df_result.columns[i]:date})
-    df_result.index = pd.MultiIndex.from_tuples(df_result.index, names=['region_name','observation'])
-    df_result.reset_index(inplace = True)
-    df_result.insert(1, column = 'region_type', value = 'state')
+        df_result = df_result.rename(columns={df_result.columns[i]: date})
+    
+    # Convert data frame to required format
+    df_result.index = pd.MultiIndex.from_tuples(df_result.index, names=['region_name', 'observation'])
+    df_result.reset_index(inplace=True)
+    df_result.insert(1, column='region_type', value='state')
     df_result['region_name'] = df_result['region_name'].str.lower()
     df_result = df_result.fillna(0)
+    
     return df_result
+
 
 class RootnetStatsHistory(DataFetcherBase):
 
