@@ -24,6 +24,7 @@ class TrainingModuleConfig(BaseConfig):
     search_parameters: dict
     training_loss_function: LossFunction
     loss_functions: List[LossFunction]
+    ensemble: bool
 
 
 class ModelEvaluatorConfig(BaseConfig):
