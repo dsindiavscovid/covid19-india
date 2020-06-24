@@ -39,6 +39,8 @@ class ForecastingModuleConfig(BaseConfig):
     forecast_start_date: str
     forecast_end_date: str
     forecast_variables: List[ForecastVariable]
+    with_uncertainty: bool
+    uncertainty_parameters: dict
 
 
 class Intervention(BaseModel):

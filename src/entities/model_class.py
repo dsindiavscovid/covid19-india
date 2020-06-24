@@ -6,3 +6,4 @@ class ModelClass(str, enum.Enum):
     SEIR = "SEIR"
     IHME = "IHME"
     SEIHRD = "SEIHRD"
+    heterogeneous_ensemble = "heterogeneous_ensemble"
