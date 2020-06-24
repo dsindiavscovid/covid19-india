@@ -169,8 +169,8 @@ def train_eval(region, region_type,
 
     metrics['Train1RMLSE'] = train1RMSLE
     metrics['Train1MAPE'] = train1MAPE
-    metrics.update(parse_params(trainResults['best_params'], 'Train1'))
-    metrics.update(parse_params(trainResults['latent_params'], 'Train1')) 
+    #metrics.update(parse_params(trainResults['best_params'], 'Train1'))
+    #metrics.update(parse_params(trainResults['latent_params'], 'Train1')) 
     metrics.update(parse_metrics(trainResults['train_metric_results'], 'Train1')) 
     train1_model_params['model_parameters'] = trainResults['model_parameters']
     
@@ -181,8 +181,9 @@ def train_eval(region, region_type,
     test_config['test_start_date'] = test_start_date
     test_config['test_end_date'] = test_end_date
     test_config['run_day'] = run_day
-    test_config['model_parameters'].update(trainResults['best_params'])    
-    test_config['model_parameters'].update(trainResults['latent_params'])  
+    #test_config['model_parameters'].update(trainResults['best_params'])    
+    #test_config['model_parameters'].update(trainResults['latent_params']) 
+    test_config['model_parameters'].update(trainResults['model_parameters'])
         
     if mlflow_log:
         test_config['output_filepath'] = 'test_output.json'
@@ -231,8 +232,8 @@ def train_eval(region, region_type,
 
     metrics['Train2MAPE'] = train2MAPE
     metrics['Train2RMLSE'] = train2RMSLE
-    metrics.update(parse_params(finalResults['best_params'], 'Train2'))
-    metrics.update(parse_params(finalResults['latent_params'], 'Train2'))
+#     metrics.update(parse_params(finalResults['best_params'], 'Train2'))
+#     metrics.update(parse_params(finalResults['latent_params'], 'Train2'))
     metrics.update(parse_metrics(finalResults['train_metric_results'], 'Train2')) 
     
     model_params['model_parameters'] = finalResults['model_parameters']
@@ -260,11 +261,10 @@ def forecast(model_params, run_day, forecast_start_date, forecast_end_date,
     evalConfig.region_type = model_params['region_type']
     evalConfig.model_parameters = model_params['model_parameters']
 
-
     evalConfig.run_day = run_day
     evalConfig.forecast_start_date = forecast_start_date
     evalConfig.forecast_end_date = forecast_end_date
-
+    
     forecast_json = ForecastingModule.from_config(evalConfig)
     forecast_df = pd.read_json(forecast_json)
     forecast_df = forecast_df.drop(columns=['Region Type', 'Region', 'Country', 'Lat', 'Long'])
