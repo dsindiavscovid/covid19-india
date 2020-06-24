@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from functools import partial
 import json
-from typing import List
 from hyperopt import hp
 from configs.base_config import TrainingModuleConfig
 from model_wrappers.model_factory import ModelFactory
@@ -36,7 +35,8 @@ class TrainingModule(object):
             result.update(latent_params)
 
         model_params = self._model_parameters
-        model_params.update(latent_params["latent_params"])
+        if latent_params:
+            model_params.update(latent_params["latent_params"])
         model_params.update(result["best_params"])
         model_params["MAPE"] = result["best_loss"]
         result["model_parameters"] = model_params
@@ -44,7 +44,7 @@ class TrainingModule(object):
     
     def train_for_ensemble(self, region_metadata, region_observations, train_start_date, train_end_date, search_space,
               search_parameters, train_loss_function):
-        result = {}
+
         if self._model.is_black_box():
             objective = partial(self.optimize, region_metadata=region_metadata, region_observations=region_observations,
                                 train_start_date=train_start_date,
@@ -61,19 +61,16 @@ class TrainingModule(object):
             for i in range(len(result_list)):
                 result = result_list[i]
                 model_params.update(result[0]) 
-                print(model_params)                
                 latent_params = self._model.get_latent_params(region_metadata, region_observations, run_day,
                                                           train_end_date, model_params)
-                
-
-                model_params.update(latent_params)
+                model_params.update(latent_params["latent_params"])
                 tempDict = dict()
                 tempDict['model_class'] = self._model_class.name
                 tempDict['model_parameters'] = model_params
                 constituent_models[str(i)] = tempDict
                 constituent_model_losses[str(i)] = result[1]
                 
-        return {"model_parameters": {"consituent_models": constituent_models, "constituent_model_losses": constituent_model_losses}}
+        return {"model_parameters": {"constituent_models": constituent_models, "constituent_model_losses": constituent_model_losses}}
 
     def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
                  loss_function):
@@ -88,7 +85,7 @@ class TrainingModule(object):
                          search_space, search_parameters, train_loss_function, is_ensemble):
         observations = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source)
         region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source)
-        if(is_ensemble):
+        if is_ensemble:
             return self.train_for_ensemble(region_metadata, observations, train_start_date, train_end_date,
                           search_space, search_parameters, train_loss_function) 
         else:
@@ -103,12 +100,9 @@ class TrainingModule(object):
                                                    config.train_end_date,
                                                    config.search_space,
                                                    config.search_parameters, config.training_loss_function, config.ensemble)
-        if(not config.ensemble):
+        if not config.ensemble:
             config.model_parameters.update(
                 results["model_parameters"])  # updating model parameters with best params found above
-    #         config.model_parameters.update(
-    #             results["latent_params"])
-    #         config.model_parameters.update(results)
             model_evaluator = ModelEvaluator(config.model_class, config.model_parameters)
             run_day = (datetime.strptime(config.train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
             results["train_metric_results"] = model_evaluator.evaluate_for_region(config.data_source, config.region_type, config.region_name,
