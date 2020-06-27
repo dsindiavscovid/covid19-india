@@ -6,6 +6,7 @@ from configs.base_config import TrainingModuleConfig
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.model_evaluator import ModelEvaluator
+from entities.model_class import ModelClass
 from utils.config_util import read_config_file
 from utils.hyperparam_util import hyperparam_tuning, hyperparam_tuning_ensemble
 
@@ -21,15 +22,19 @@ class TrainingModule(object):
               search_parameters, train_loss_function):
         result = {}
         if self._model.is_black_box():
+            run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime(
+                "%-m/%-d/%y")
+            predictions = None
+            if self._model_class == ModelClass.heterogeneous_ensemble:
+                predictions = self._model.get_predictions(region_metadata, region_observations, run_day,
+                                                          train_start_date, train_end_date)
             objective = partial(self.optimize, region_metadata=region_metadata, region_observations=region_observations,
-                                train_start_date=train_start_date,
-                                train_end_date=train_end_date, loss_function=train_loss_function)
+                                train_start_date=train_start_date, train_end_date=train_end_date,
+                                loss_function=train_loss_function, predictions=predictions)
             for k, v in search_space.items():
                 search_space[k] = hp.uniform(k, v[0], v[1])
             result = hyperparam_tuning(objective, search_space,
                                        search_parameters.get("max_evals", 100))
-            run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime(
-                "%-m/%-d/%y")
             latent_params = self._model.get_latent_params(region_metadata, region_observations, run_day,
                                                           train_end_date, result["best_params"])
             result.update(latent_params)
@@ -73,11 +78,11 @@ class TrainingModule(object):
         return {"model_parameters": {"constituent_models": constituent_models, "constituent_model_losses": constituent_model_losses}}
 
     def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
-                 loss_function):
+                 loss_function, predictions=None):
         run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
         predict_df = self._model.predict(region_metadata, region_observations, run_day, train_start_date,
                                          train_end_date,
-                                         search_space=search_space, is_tuning=True)
+                                         search_space=search_space, is_tuning=True, predictions=predictions)
         metrics_result = ModelEvaluator.evaluate_for_forecast(region_observations, predict_df, [loss_function])
         return metrics_result[0]["value"]
 

@@ -743,35 +743,35 @@ def train_eval_plot(region, region_type,
     test_end_date = dates['test_end_date']
     test_run_day = dates['test_run_day']
     
-    with mlflow.start_run(run_name = mlflow_run_name):
+    params, metrics, train1_params, train2_params = train_eval(region, region_type, 
+                                                           train1_start_date, train1_end_date, 
+                                                           train2_start_date, train2_end_date, train2_run_day,
+                                                           test_start_date, test_end_date,
+                                                           default_train_config, default_test_config,
+                                                           max_evals = max_evals, data_source = data_source, 
+                                                           mlflow_log = mlflow_log,
+                                                           name_prefix = name_prefix)
+
+    plot_m1(train1_params, train1_run_day, train1_start_date, train1_end_date, 
+        test_run_day, test_start_date, test_end_date, 
+        rolling_average = False, uncertainty = False, 
+        plot_config = 'plot_config.json', plot_name = name_prefix+'_m1.png')
+
+    plot_m2(train2_params, train1_start_date, train1_end_date, 
+        test_run_day, test_start_date, test_end_date, plot_name = name_prefix+ '_m2.png')
+
+    forecast_start_date = (datetime.strptime(train2_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
+    plot_m3(train2_params, train1_start_date, 
+            forecast_start_date, forecast_length, plot_name = name_prefix +'_m3.png')
     
-        params, metrics, train1_params, train2_params = train_eval(region, region_type, 
-                                                               train1_start_date, train1_end_date, 
-                                                               train2_start_date, train2_end_date, train2_run_day,
-                                                               test_start_date, test_end_date,
-                                                               default_train_config, default_test_config,
-                                                               max_evals = max_evals, data_source = data_source, 
-                                                               mlflow_log = mlflow_log,
-                                                               name_prefix = name_prefix)
-
-        plot_m1(train1_params, train1_run_day, train1_start_date, train1_end_date, 
-            test_run_day, test_start_date, test_end_date, 
-            rolling_average = False, uncertainty = False, 
-            plot_config = 'plot_config.json', plot_name = name_prefix+'_m1.png')
-
-        plot_m2(train2_params, train1_start_date, train1_end_date, 
-            test_run_day, test_start_date, test_end_date, plot_name = name_prefix+ '_m2.png')
-
-        forecast_start_date = (datetime.strptime(train2_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
-        plot_m3(train2_params, train1_start_date, 
-                forecast_start_date, forecast_length, plot_name = name_prefix +'_m3.png')
-        
-        mlflow.log_params(params)
-        mlflow.log_metrics(metrics)
-        mlflow.log_artifact(name_prefix+'_m1.png')
-        mlflow.log_artifact(name_prefix+'_m2.png')
-        mlflow.log_artifact(name_prefix+'_m3.png')
-        mlflow.log_artifact('train_config.json')
-        mlflow.log_artifact('train1_output.json')
-        mlflow.log_artifact('test_output.json')
-        mlflow.log_artifact('train2_output.json')
+    if mlflow_log:
+        with mlflow.start_run(run_name = mlflow_run_name):
+            mlflow.log_params(params)
+            mlflow.log_metrics(metrics)
+            mlflow.log_artifact(name_prefix+'_m1.png')
+            mlflow.log_artifact(name_prefix+'_m2.png')
+            mlflow.log_artifact(name_prefix+'_m3.png')
+            mlflow.log_artifact('train_config.json')
+            mlflow.log_artifact('train1_output.json')
+            mlflow.log_artifact('test_output.json')
+            mlflow.log_artifact('train2_output.json')

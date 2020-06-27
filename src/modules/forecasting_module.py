@@ -30,7 +30,7 @@ class ForecastingModule(object):
         predictions_df = self._model.predict_with_uncertainty(region_metadata, region_observations, run_day,
                                                               forecast_start_date, forecast_end_date,
                                                               uncertainty_parameters)
-        return predictions_df.to_json()
+        return predictions_df
 
     def predict_old_format(self, region_type: str, region_name: str, region_metadata: dict,
                            region_observations: pd.DataFrame,
