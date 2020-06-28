@@ -68,9 +68,10 @@
     "with_uncertainty": "False",
     "uncertainty_parameters": {
         "include_mean": "True",
-        "percentiles": [70, 80, 90],
+        "percentiles": [10, 20, 30, 40, 50, 60, 70, 80, 90],
         "ci": 95,
         "date_of_interest": "6/3/20",
-        "column_of_interest": "hospitalized"
+        "column_of_interest": "hospitalized",
+        "window": 5
     }
 }

@@ -6,7 +6,8 @@ import copy
 from entities.forecast_variables import ForecastVariable
 from model_wrappers.base import ModelWrapperBase
 import model_wrappers.model_factory as model_factory_alias
-from utils.ensemble_utils import get_weighted_predictions, create_trials_dataframe, uncertainty_dict_to_df
+from utils.ensemble_util import get_weighted_predictions, create_trials_dataframe, uncertainty_dict_to_df
+from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
 
 
 class HeterogeneousEnsemble(ModelWrapperBase):
@@ -75,57 +76,55 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         column_of_interest = uncertainty_params['column_of_interest']
         include_mean = uncertainty_params['include_mean']
         percentiles = uncertainty_params['percentiles']
-        # multiple confidence intervals?
-        ci = uncertainty_params['ci']
+        ci = uncertainty_params['ci']  # multiple confidence intervals?
         alpha = 100 - ci
         confidence_intervals = {"low": alpha/2, "high": 100-alpha/2}
+        window = uncertainty_params['window']
 
-        # Get predictions
+        percentiles_dict = dict()
+        percentiles_forecast = dict()
+
+        # Get predictions, mean predictions and weighted predictions
         predictions_df_dict = self.get_predictions(region_metadata, region_observations,
                                                    run_day, start_date, end_date)
         mean_predictions_df = self.predict(region_metadata, region_observations, run_day,
                                            start_date, end_date, predictions=predictions_df_dict, **kwargs)
-        weighted_predictions_df_list = get_weighted_predictions(predictions_df_dict)
+        weighted_predictions_df_dict = get_weighted_predictions(predictions_df_dict, self.weights)
 
-        trials_df = create_trials_dataframe(weighted_predictions_df_list, column_of_interest)
+        # Get predictions on date of interest
+        trials_df = create_trials_dataframe(weighted_predictions_df_dict, column_of_interest)
         predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
         df = pd.DataFrame.from_dict(self.weights, orient='index', columns=['weight'])
         df = df.join(predictions_doi.set_index(df.index))
 
-        df['pdf'] = df['weight']/df['weight'].sum()
+        # Find PDF, CDF
+        df['pdf'] = weights_to_pdf(df['weight'])
         df = df.sort_values(by=date_of_interest)
         df = df.reset_index()
-        df['cdf'] = df['pdf'].cumsum()
+        df['cdf'] = pdf_to_cdf(df['pdf'])
 
-        percentiles_dict = dict()
-
+        # Get indices for percentiles and confidence intervals
         for p in percentiles:
-            idx = (df['cdf'] - p/100).apply(abs).idxmin()
-            best_idx = df.iloc[idx - 2:idx + 2, :]['index'].min()
-            percentiles_dict[p] = best_idx
-
+            percentiles_dict[p] = get_best_index(df, p, window)
         for c in confidence_intervals:
-            idx = (df['cdf'] - confidence_intervals[c] / 100).apply(abs).idxmin()
-            best_idx = df.iloc[idx - 2:idx + 2, :]['index'].min()
-            percentiles_dict[c] = best_idx
+            percentiles_dict[c] = get_best_index(df, confidence_intervals[c], window)
 
-        percentiles_forecast = dict()
-
+        # Create dictionary of dataframes for percentiles
         for key in percentiles_dict.keys():
             percentiles_forecast[key] = {}
-            df_predictions = weighted_predictions_df_list[percentiles_dict[key]]
+            df_predictions = weighted_predictions_df_dict[percentiles_dict[key]]
             percentiles_forecast[key]['df_prediction'] = df_predictions
 
+        # Include mean predictions if include_mean is True
         if include_mean:
             percentiles_forecast['include_mean'] = {}
             percentiles_forecast['include_mean']['df_prediction'] = mean_predictions_df
 
+        # percentiles_forecast = self.uncertainty_dict_to_df(percentiles_forecast)
         return percentiles_forecast
 
     # def find_beta(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
     #               end_date: str, loss_function_config, **kwargs):
-    #     # def find_beta(self, region_metadata, region_observations, train_start_date, train_end_date, search_space,
-    #     #               search_parameters, train_loss_function):
     #     max_evals = loss_function_config['max_evals']
     #     search_space = loss_function_config['search_space']
     #     training_loss_function = loss_function_config['training_loss_function']
