@@ -17,8 +17,8 @@ def create_connection(pyathena_rc_path=None):
     Returns:
         [cursor] -- [Connection Cursor]
     """
-    if pyathena_rc_path == None:
-        pyathena_rc_path = Path(__file__).parent / "../../../../pyathena/pyathena.rc"
+    if pyathena_rc_path is None:
+        pyathena_rc_path = Path(__file__).parent / "../../../pyathena/pyathena.rc"
     SCHEMA_NAME = 'wiai-covid-data'
 
     # Open Pyathena RC file and get list of all connection variables in a processable format
@@ -57,8 +57,8 @@ def get_athena_dataframes(pyathena_rc_path=None):
         healthcare_capacity
         testing_summary
     """
-    if pyathena_rc_path == None:
-        pyathena_rc_path = Path(__file__).parent / "../../../../pyathena/pyathena.rc"
+    if pyathena_rc_path is None:
+        pyathena_rc_path = Path(__file__).parent / "../../../pyathena/pyathena.rc"
 
     # Create connection
     cursor = create_connection(pyathena_rc_path)
