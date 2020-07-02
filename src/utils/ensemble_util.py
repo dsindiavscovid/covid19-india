@@ -15,7 +15,7 @@ def create_trials_dataframe(predictions_df_dict, column=ForecastVariable.active)
     return pd.concat(trials_df_list, axis=0, ignore_index=True)
 
 
-def uncertainty_dict_to_df(self, percentiles_forecast, icu_fraction=0.02):
+def uncertainty_dict_to_df(percentiles_forecast, icu_fraction=0.02):
     columns = ['Region Type', 'Region', 'Country', 'Lat', 'Long', 'predictionDate']
 
     for decile in percentiles_forecast.keys():
