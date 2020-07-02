@@ -1,6 +1,8 @@
 {
     "model_class": "heterogeneous_ensemble",
     "ensemble": "False",
+    "train_start_date":"",
+    "train_end_date": "",
     "model_parameters": {
         "constituent_models": {
             "0": {
@@ -49,7 +51,9 @@
         "constituent_model_losses": {
             "0": 614.1516557715153,
             "1": 2125.477875711327
-        }
+        },
+        "with_uncertainty": "False",
+        "beta": 0
     },
     "search_space": {
         "beta": [
