@@ -36,4 +36,14 @@ def convert_to_nhu_format(predictions_df, region_type, region_name, mape):
     preddf.insert(2, 'Country', 'India')
     preddf.insert(3, 'Lat', 20)
     preddf.insert(4, 'Long', 70)
+    preddf.rename_axis(columns={"date": None}, inplace=True) # if no json conversion
     return preddf
+
+
+def convert_dataframe( region_df):
+    region_df = region_df.reset_index()
+    region_df.drop(["region_name", "region_type", "index"], axis=1, inplace=True)
+    headers = region_df.transpose().reset_index().iloc[0]
+    transposed_df = pd.DataFrame(region_df.transpose().reset_index().values[1:], columns=headers)
+    transposed_df.rename({"observation": "date"}, axis='columns', inplace=True)
+    return transposed_df
