@@ -6,9 +6,9 @@ from configs.base_config import TrainingModuleConfig
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.model_evaluator import ModelEvaluator
-from entities.model_class import ModelClass
 from utils.config_util import read_config_file
-from utils.hyperparam_util import hyperparam_tuning, hyperparam_tuning_ensemble
+from utils.hyperparam_util import hyperparam_tuning_ensemble
+from utils.loss_util import evaluate_for_forecast
 
 
 class TrainingModule(object):
@@ -20,35 +20,12 @@ class TrainingModule(object):
 
     def train(self, region_metadata, region_observations, train_start_date, train_end_date, search_space,
               search_parameters, train_loss_function):
-        result = {}
-        if self._model.is_black_box():
-            run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime(
-                "%-m/%-d/%y")
-            predictions = None
-            if self._model_class == ModelClass.heterogeneous_ensemble:
-                predictions = self._model.get_predictions(region_metadata, region_observations, run_day,
-                                                          train_start_date, train_end_date)
-            objective = partial(self.optimize, region_metadata=region_metadata, region_observations=region_observations,
-                                train_start_date=train_start_date, train_end_date=train_end_date,
-                                loss_function=train_loss_function, predictions=predictions)
-            for k, v in search_space.items():
-                search_space[k] = hp.uniform(k, v[0], v[1])
-            result = hyperparam_tuning(objective, search_space,
-                                       search_parameters.get("max_evals", 100))
-            latent_params = self._model.get_latent_params(region_metadata, region_observations, run_day,
-                                                          train_end_date, result["best_params"])
-            result.update(latent_params)
-
-        model_params = self._model_parameters
-        if latent_params:
-            model_params.update(latent_params["latent_params"])
-        model_params.update(result["best_params"])
-        model_params["MAPE"] = result["best_loss"]
-        result["model_parameters"] = model_params
-        return {"model_parameters": model_params}
+        return self._model.train(region_metadata, region_observations, train_start_date, train_end_date,
+                                 search_space, search_parameters, train_loss_function)
     
     def train_for_ensemble(self, region_metadata, region_observations, train_start_date, train_end_date, search_space,
-              search_parameters, train_loss_function):
+                           search_parameters, train_loss_function):
+        # TODO: REMOVE THIS AND MERGE WITH HARSH'S IMPLEMENTATION
 
         if self._model.is_black_box():
             objective = partial(self.optimize, region_metadata=region_metadata, region_observations=region_observations,
@@ -57,7 +34,7 @@ class TrainingModule(object):
             for k, v in search_space.items():
                 search_space[k] = hp.uniform(k, v[0], v[1])
             result_list = hyperparam_tuning_ensemble(objective, search_space,
-                                       search_parameters.get("max_evals", 100))
+                                                     search_parameters.get("max_evals", 100))
             run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime(
                 "%-m/%-d/%y")
             model_params = self._model_parameters
@@ -67,7 +44,7 @@ class TrainingModule(object):
                 result = result_list[i]
                 model_params.update(result[0]) 
                 latent_params = self._model.get_latent_params(region_metadata, region_observations, run_day,
-                                                          train_end_date, model_params)
+                                                              train_end_date, model_params)
                 model_params.update(latent_params["latent_params"])
                 tempDict = dict()
                 tempDict['model_class'] = self._model_class.name
@@ -79,11 +56,12 @@ class TrainingModule(object):
 
     def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
                  loss_function, predictions=None):
+        # TODO: REMOVE THIS
         run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
         predict_df = self._model.predict(region_metadata, region_observations, run_day, train_start_date,
                                          train_end_date,
                                          search_space=search_space, is_tuning=True, predictions=predictions)
-        metrics_result = ModelEvaluator.evaluate_for_forecast(region_observations, predict_df, [loss_function])
+        metrics_result = evaluate_for_forecast(region_observations, predict_df, [loss_function])
         return metrics_result[0]["value"]
 
     def train_for_region(self, data_source, region_type, region_name, train_start_date, train_end_date,
@@ -92,10 +70,10 @@ class TrainingModule(object):
         region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source)
         if is_ensemble:
             return self.train_for_ensemble(region_metadata, observations, train_start_date, train_end_date,
-                          search_space, search_parameters, train_loss_function) 
+                                           search_space, search_parameters, train_loss_function)
         else:
             return self.train(region_metadata, observations, train_start_date, train_end_date,
-                          search_space, search_parameters, train_loss_function)
+                              search_space, search_parameters, train_loss_function)
 
     @staticmethod
     def from_config(config: TrainingModuleConfig):
@@ -117,7 +95,7 @@ class TrainingModule(object):
                                                                                   config.loss_functions)
         if config.output_filepath is not None:
             with open(config.output_filepath, 'w') as outfile:
-                json.dump(results, outfile, indent = 4)
+                json.dump(results, outfile, indent=4)
         return results
 
     @staticmethod
