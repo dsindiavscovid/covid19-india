@@ -1,5 +1,3 @@
-import pandas as pd
-
 from model_wrappers.intervention_enabled_model_base import InterventionEnabledModelBase
 from model_wrappers.seihrd import SEIHRD
 

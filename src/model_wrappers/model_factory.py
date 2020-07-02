@@ -1,5 +1,4 @@
 from entities.model_class import ModelClass
-from model_wrappers.base import ModelWrapperBase
 from model_wrappers.intervention_enabled_seihrd import InterventionEnabledSEIHRD
 from model_wrappers.intervention_enabled_seir import InterventionEnabledSEIR
 from model_wrappers.seir import SEIR

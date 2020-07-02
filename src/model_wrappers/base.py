@@ -2,7 +2,6 @@ import pandas as pd
 
 import abc
 
-from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
 
 ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})
