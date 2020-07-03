@@ -12,7 +12,7 @@ def convert_to_initial_observations(df):
 
 
 def convert_to_nhu_format(predictions_df, region_type, region_name, mape):
-    dates = predictions_df['date']
+    # dates = predictions_df['date']
     preddf = predictions_df.set_index('date')
     columns = [ForecastVariable.active.name, ForecastVariable.hospitalized.name, ForecastVariable.icu.name,
                ForecastVariable.recovered.name, ForecastVariable.deceased.name, ForecastVariable.confirmed.name]
@@ -20,23 +20,23 @@ def convert_to_nhu_format(predictions_df, region_type, region_name, mape):
         preddf = preddf.rename(columns={col: col + '_mean'})
     preddf = preddf.transpose().reset_index()
     preddf = preddf.rename(columns={"index": "prediction_type", })
-    error = min(1, float(mape) / 100)
-    for col in columns:
-        col_mean = col + '_mean'
-        series = preddf[preddf['prediction_type'] == col_mean][dates]
-        newSeries = series.multiply((1 - error))
-        newSeries['prediction_type'] = col + '_min'
-        preddf = preddf.append(newSeries, ignore_index=True)
-        newSeries = series.multiply((1 + error))
-        newSeries['prediction_type'] = col + '_max'
-        preddf = preddf.append(newSeries, ignore_index=True)
-        preddf = preddf.rename(columns={col: col + '_mean'})
+    # error = min(1, float(mape) / 100)
+    # for col in columns:
+    #     col_mean = col + '_mean'
+    #     series = preddf[preddf['prediction_type'] == col_mean][dates]
+    #     newSeries = series.multiply((1 - error))
+    #     newSeries['prediction_type'] = col + '_min'
+    #     preddf = preddf.append(newSeries, ignore_index=True)
+    #     newSeries = series.multiply((1 + error))
+    #     newSeries['prediction_type'] = col + '_max'
+    #     preddf = preddf.append(newSeries, ignore_index=True)
+    #     preddf = preddf.rename(columns={col: col + '_mean'})
     preddf.insert(0, 'Region Type', region_type)
     preddf.insert(1, 'Region', " ".join(region_name))
     preddf.insert(2, 'Country', 'India')
     preddf.insert(3, 'Lat', 20)
     preddf.insert(4, 'Long', 70)
-    preddf.rename_axis(columns={"date": None}, inplace=True) # if no json conversion
+    preddf.rename_axis(columns={"date": None}, inplace=True)  # if no json conversion
     return preddf
 
 
