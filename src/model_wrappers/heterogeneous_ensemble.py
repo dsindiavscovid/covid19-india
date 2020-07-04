@@ -74,7 +74,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
     def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                 end_date: str, **kwargs):
-        if self.model_parameters['predict_mode'] == 'with_uncertainty':
+        if self.model_parameters['modes']['predict_mode'] == 'with_uncertainty':
             return self.predict_with_uncertainty(region_metadata, region_observations, run_day, start_date, end_date)
         else:
             return self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date, **kwargs)
