@@ -66,7 +66,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
     def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
                  loss_function):
         run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
-        predict_df = self.predict(region_metadata, region_observations, run_day, train_start_date,
+        predict_df = self.predict_mean(region_metadata, region_observations, run_day, train_start_date,
                                   train_end_date,
                                   search_space=search_space, is_tuning=True)
         metrics_result = evaluate_for_forecast(region_observations, predict_df, [loss_function])
@@ -74,7 +74,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
     def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                 end_date: str, **kwargs):
-        if self.model_parameters['with_uncertainty']:
+        if self.model_parameters['modes']['predict_mode'] == 'with_uncertainty':
             return self.predict_with_uncertainty(region_metadata, region_observations, run_day, start_date, end_date)
         else:
             return self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date, **kwargs)
@@ -115,7 +115,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         ci = uncertainty_params['ci']  # multiple confidence intervals?
         alpha = 100 - ci
         confidence_intervals = {"low": alpha/2, "high": 100-alpha/2}
-        window = uncertainty_params['window']
+        tolerance = uncertainty_params['tolerance']
 
         percentiles_dict = dict()
         percentiles_forecast = dict()
@@ -127,7 +127,10 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         # Get predictions on date of interest
         trials_df = create_trials_dataframe(predictions_df_dict, column_of_interest)
-        predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
+        try:
+            predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
+        except KeyError:
+            raise Exception("The planning date is not in the range of predicted dates")
         df = pd.DataFrame.from_dict(self.weights, orient='index', columns=['weight'])
         df = df.join(predictions_doi.set_index(df.index))
 
@@ -138,9 +141,9 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         # Get indices for percentiles and confidence intervals
         for p in percentiles:
-            percentiles_dict[p] = get_best_index(df, p, window)
+            percentiles_dict[p] = get_best_index(df, p, tolerance)
         for c in confidence_intervals:
-            percentiles_dict[c] = get_best_index(df, confidence_intervals[c], window)
+            percentiles_dict[c] = get_best_index(df, confidence_intervals[c], tolerance)
 
         # Create dictionary of dataframes for percentiles
         for key in percentiles_dict.keys():
@@ -154,6 +157,6 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         if include_mean:
             # TODO: RESOLVE DATE TYPES AND USE A JOIN
             percentiles_forecast = pd.concat([mean_predictions_df, percentiles_forecast], axis=1)
-            percentiles_forecast.drop(columns='predictionDate')
+            percentiles_forecast.drop(columns='predictionDate', inplace=True)
 
         return percentiles_forecast
