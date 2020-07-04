@@ -66,7 +66,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
     def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
                  loss_function):
         run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
-        predict_df = self.predict(region_metadata, region_observations, run_day, train_start_date,
+        predict_df = self.predict_mean(region_metadata, region_observations, run_day, train_start_date,
                                   train_end_date,
                                   search_space=search_space, is_tuning=True)
         metrics_result = evaluate_for_forecast(region_observations, predict_df, [loss_function])
@@ -74,7 +74,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
     def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                 end_date: str, **kwargs):
-        if self.model_parameters['with_uncertainty']:
+        if self.model_parameters['predict_mode'] == 'with_uncertainty':
             return self.predict_with_uncertainty(region_metadata, region_observations, run_day, start_date, end_date)
         else:
             return self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date, **kwargs)
