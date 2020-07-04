@@ -7,3 +7,4 @@ class ModelClass(str, enum.Enum):
     IHME = "IHME"
     SEIHRD = "SEIHRD"
     heterogeneous_ensemble = "heterogeneous_ensemble"
+    homogeneous_ensemble = "homogeneous_ensemble"

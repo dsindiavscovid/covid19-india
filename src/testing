@@ -1,0 +1,74 @@
+{
+    "model_parameters": {
+        "child_model": {
+            "model_class": "SEIHRD",
+            "model_parameters": {
+                "incubation_period": 5,
+                "F_icu": 0.05,
+                "EbyCRatio": 35.355173801758106,
+                "F_fatalities": 0.024418085941281892,
+                "F_hospitalization": 0.06985805950078938,
+                "IbyCRatio": 1.02073851163964,
+                "beta": 0.8753209377597728,
+                "infectious_period": 8.379448047180347,
+                "r0": 0.8510476459783196
+            }
+        },
+        "modes": {
+            "training_mode": "only_beta",
+            "predict_mode": "mean"
+        },
+        "constituent_models": {
+            "0": {
+                "model_class": "SEIHRD",
+                "model_parameters": {
+                    "incubation_period": 5,
+                    "F_icu": 0.05,
+                    "EbyCRatio": 5.5318834190905966,
+                    "F_fatalities": 0.08478985013880908,
+                    "F_hospitalization": 0.001242944775633234,
+                    "IbyCRatio": 1.8266474953874523,
+                    "beta": 1.5650498777511674,
+                    "infectious_period": 6.579287386682303,
+                    "r0": 2.7540644220597765,
+                    "LatentEbyCRatio": {
+                        "5/27/20": 5.5318834190905966,
+                        "6/3/20": 2.0863486791742116
+                    },
+                    "LatentIbyCRatio": {
+                        "5/27/20": 1.8266474953874523,
+                        "6/3/20": 0.8689042504490133
+                    }
+                }
+            },
+            "1": {
+                "model_class": "SEIHRD",
+                "model_parameters": {
+                    "incubation_period": 5,
+                    "F_icu": 0.05,
+                    "EbyCRatio": 35.355173801758106,
+                    "F_fatalities": 0.024418085941281892,
+                    "F_hospitalization": 0.06985805950078938,
+                    "IbyCRatio": 1.02073851163964,
+                    "beta": 0.8753209377597728,
+                    "infectious_period": 8.379448047180347,
+                    "r0": 0.8510476459783196,
+                    "LatentEbyCRatio": {
+                        "5/27/20": 35.355173801758106,
+                        "6/3/20": 1.4729437403565115
+                    },
+                    "LatentIbyCRatio": {
+                        "5/27/20": 1.02073851163964,
+                        "6/3/20": 0.25685211725879076
+                    }
+                }
+            }
+        },
+        "constituent_model_losses": {
+            "0": 162.07823193304745,
+            "1": 357.96538292254047
+        },
+        "beta": 0.4595538343023229,
+        "MAPE": 162.07823193304745
+    }
+}
