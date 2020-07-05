@@ -20,7 +20,7 @@ class ForecastingModule(object):
                 forecast_end_date: str):
         predictions_df = self._model.predict(region_metadata, region_observations, run_day, forecast_start_date,
                                              forecast_end_date)
-        predictions_df = convert_to_jhu_format(predictions_df, region_type, region_name, self._model_parameters['MAPE'])
+        predictions_df = convert_to_jhu_format(predictions_df, region_type, region_name)
         return predictions_df
 
     def predict_old_format(self, region_type: str, region_name: str, region_metadata: dict,
