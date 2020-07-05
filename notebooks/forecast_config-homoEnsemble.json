@@ -54,7 +54,7 @@
        "column_of_interest": "confirmed",
        "percentiles": [40, 50, 90],
        "ci": 5,
-       "window": 2
+       "window": 1
    }
 	},
 	"output_filepath": ""
