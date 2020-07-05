@@ -56,7 +56,6 @@ class HeterogeneousEnsemble(ModelWrapperBase):
                 search_space[k] = hp.uniform(k, v[0], v[1])
             result = hyperparam_tuning(objective, search_space,
                                        search_parameters.get("max_evals", 100))
-
         model_params = self.model_parameters
         model_params.update(result["best_params"])
         model_params["MAPE"] = result["best_loss"]
@@ -98,7 +97,8 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         self.weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
         predictions_df_dict = get_weighted_predictions(predictions_df_dict, self.weights)
         mean_predictions_df = reduce(lambda left, right: left.add(right), predictions_df_dict.values())
-        mean_predictions_df = mean_predictions_df.div(sum(self.weights.values()))
+        if sum(self.weights.values()) != 0:
+            mean_predictions_df = mean_predictions_df.div(sum(self.weights.values()))
         mean_predictions_df.reset_index(inplace=True)
         return mean_predictions_df
 
@@ -115,7 +115,8 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         ci = uncertainty_params['ci']  # multiple confidence intervals?
         alpha = 100 - ci
         confidence_intervals = {"low": alpha/2, "high": 100-alpha/2}
-        tolerance = uncertainty_params['tolerance']
+        # tolerance = uncertainty_params['tolerance']
+        window = uncertainty_params['window']
 
         percentiles_dict = dict()
         percentiles_forecast = dict()
@@ -141,9 +142,9 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         # Get indices for percentiles and confidence intervals
         for p in percentiles:
-            percentiles_dict[p] = get_best_index(df, p, tolerance)
+            percentiles_dict[p] = get_best_index(df, p, window)
         for c in confidence_intervals:
-            percentiles_dict[c] = get_best_index(df, confidence_intervals[c], tolerance)
+            percentiles_dict[c] = get_best_index(df, confidence_intervals[c], window)
 
         # Create dictionary of dataframes for percentiles
         for key in percentiles_dict.keys():
