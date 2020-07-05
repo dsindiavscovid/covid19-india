@@ -16,7 +16,7 @@ def create_trials_dataframe(predictions_df_dict, column=ForecastVariable.active)
 
 
 def uncertainty_dict_to_df(percentiles_forecast, icu_fraction=0.02):
-    columns = ['Region Type', 'Region', 'Country', 'Lat', 'Long', 'predictionDate']
+    columns = ['predictionDate']
 
     for decile in percentiles_forecast.keys():
         columns += [f'active_{decile}',
