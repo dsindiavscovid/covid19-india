@@ -52,7 +52,9 @@
             "0": 614.1516557715153,
             "1": 2125.477875711327
         },
-        "with_uncertainty": "False",
+        "modes": {
+            "predict_mode": "with_uncertainty"
+        },
         "beta": 0
     },
     "search_space": {

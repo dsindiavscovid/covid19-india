@@ -59,7 +59,9 @@
         },
         "beta": 0.9399626141038897,
         "MAPE": 48.61935822410172,
-        "with_uncertainty": "False",
+        "modes": {
+            "predict_mode": "with_uncertainty"
+        },
         "uncertainty_parameters": {
             "include_mean": "True",
             "percentiles": [10, 20, 30, 40, 50, 60, 70, 80, 90],
