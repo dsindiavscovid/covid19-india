@@ -50,6 +50,33 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         
         return mean_params
     
+    def update_nested_dict(self, meandict, x, key):
+        if(type(x) == dict):
+            if(key not in meandict.keys()):
+                meandict[key] = dict()
+            for k in x.keys():
+                meandict[key] = self.update_nested_dict(meandict[key], x[k], k)
+            return meandict
+        else:
+            if(key in meandict.keys()):
+                meandict[key] += x
+            else:
+                meandict[key] = x
+            return meandict
+    
+    def get_mean_params(self):
+        if(self.weights == None):
+            self.weights = {idx: np.exp(-self.model_parameters['beta'] * loss) for idx, loss in self.losses.items()}
+        sum_of_weights = sum(self.weights.values())
+        
+        constituent_dict = self.model_parameters['constituent_models']
+        mean_params = dict()
+        for idx in constituent_dict.keys():
+            constituent_model = constituent_dict[idx]['model_parameters']
+            for key in constituent_model:
+                mean_params.update(self.update_nested_dict(mean_params, constituent_model[key], key))
+        return mean_params
+    
     def get_params_uncertainty(self): 
         uncertainty_params = self.model_parameters['uncertainty_parameters']
         param_of_interest = uncertainty_params['param_key_of_interest']
@@ -97,6 +124,8 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                 end_date: str, **kwargs):
         mean_params = self.get_mean_params()
         mean_param_model = model_factory_alias.ModelFactory.get_model(self.child_model_class, mean_params)
+        print(run_day, start_date, end_date, "Inside Ensemble")
+        print(mean_params)
         prediction_df = mean_param_model.predict(region_metadata, region_observations, run_day, start_date, end_date)
         return prediction_df
           
@@ -185,6 +214,31 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         else:
             print("TO BE IMPLEMENTED")
             
+            
+    def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
+                end_date: str, **kwargs):
+        
+        
+        if(self.model_parameters['modes']['predict_mode'] == 'predictions_with_uncertainty'):
+            return super().predict_with_uncertainty(region_metadata, region_observations, run_day, start_date, end_date)
+           
+        elif(self.model_parameters['modes']['predict_mode'] == 'params_with_uncertainty'):
+            return self.predict_with_decile_uncertainty(region_metadata, region_observations, run_day, start_date, end_date)
+             
+        elif(self.model_parameters['modes']['predict_mode'] == 'mean_predictions'):
+            return super().predict_mean(region_metadata, region_observations, run_day, start_date, end_date)
+             
+        elif(self.model_parameters['modes']['predict_mode'] == 'mean_params'):
+            return self.predict_from_mean_param(region_metadata, region_observations, run_day, start_date, end_date)
+        
+        else:
+             raise Exception("Invalid Predict Mode")
+        
+             
+           
+           
+        
+           
             
         
             
