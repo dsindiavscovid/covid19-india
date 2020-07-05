@@ -18,7 +18,7 @@
         },
         "modes":{
             "training_mode": "constituent_models",
-            "predict_mode": "predictions_with_uncertainty"
+            "predict_mode": "mean_predictions"
         },
         "constituent_models": {"0": {"model_class": "SEIHRD",
     "model_parameters": {"incubation_period": 5,
@@ -54,7 +54,8 @@
        "column_of_interest": "confirmed",
        "percentiles": [40, 50, 90],
        "ci": 5,
-       "window": 1
+       "window": 1,
+       "param_key_of_interest": "r0"
    }
 	},
 	"output_filepath": ""

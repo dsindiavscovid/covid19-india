@@ -91,9 +91,9 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             self.weights = {idx: np.exp(-self.model_parameters['beta'] * loss) for idx, loss in self.losses.items()}
         
         params_dict = dict()
-        for idx in model_parameters['constituent_model_losses']:
-            params_dict[idx] = [weights[idx], 
-                                model_parameters['constituent_models'][idx]['model_parameters'][param_of_interest]]
+        for idx in self.model_parameters['constituent_model_losses']:
+            params_dict[idx] = [self.weights[idx], 
+                                self.model_parameters['constituent_models'][idx]['model_parameters'][param_of_interest]]
     
         params_df = pd.DataFrame.from_dict(params_dict, orient = 'index', columns = ['weight', 'ParamOfInterest'])
         
@@ -103,18 +103,21 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
 
         percentiles_dict = dict()
         for p in percentiles:
-            percentiles_dict[p] = get_best_index(df, p, window)
+            percentiles_dict[p] = get_best_index(params_df, p, window)
         for c in confidence_intervals:
-            percentiles_dict[c] = get_best_index(df, confidence_intervals[c], window)
+            percentiles_dict[c] = get_best_index(params_df, confidence_intervals[c], window)
             
         percentiles_params = dict()
+        print(percentiles_dict)
         for key in percentiles_dict.keys():
-            percentiles_dict[key] = {}
+            percentiles_params[key] = {}
+            idx = percentiles_dict[key]
             percentiles_params[key]['model_parameters'] = self.model_parameters['constituent_models'][idx]['model_parameters']
-            percentiles_params[key]['model_index'] = percentiles_dict[key]
+            percentiles_params[key]['model_index'] = idx
             
         if(include_mean):
-            mean_params, _  = self.get_mean_params()
+            mean_params = self.get_mean_params()
+            percentiles_params['mean'] = dict()
             percentiles_params['mean']['model_parameters'] = mean_params
         
         return percentiles_params
@@ -145,19 +148,25 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         percentile_params = self.get_params_uncertainty()
         indexes = []
         for key in percentile_params.keys():
-            indexes.append(percentiles_params[key]['model_index'])
+            if(key == "mean"):
+                continue
+            indexes.append(percentile_params[key]['model_index'])
             
         predictions_df_dict = self.get_predictions_dict_some_indexes(region_metadata, region_observations,
                                                         run_day, start_date, end_date, indexes)
-        mean_predictions_df = self.predict_from_mean_param(region_metadata, region_observations, run_day, start_date, end_date)
         
         percentiles_forecast = dict()
         for key in percentile_params.keys():
-            df_predictions = predictions_df_dict[percentiles_dict[key]]
+            if(key == "mean"):
+                continue
+            percentiles_forecast[key] = dict()
+            df_predictions = predictions_df_dict[percentile_params[key]['model_index']]
             percentiles_forecast[key]['df_prediction'] = df_predictions
        
         percentiles_forecast = uncertainty_dict_to_df(percentiles_forecast)
-        percentiles_forecast = pd.concat([mean_predictions_df, percentiles_forecast], axis=1)
+        if(self.model_parameters['uncertainty_parameters']['include_mean']):
+            mean_predictions_df = self.predict_from_mean_param(region_metadata, region_observations, run_day, start_date, end_date)
+            percentiles_forecast = pd.concat([mean_predictions_df, percentiles_forecast], axis=1)
         return percentiles_forecast
     
     
