@@ -4,19 +4,28 @@
 	"region_type": "",
 	"train_start_date": "",
 	"train_end_date": "",
-	"model_class": "SEIHRD",
+	"model_class": "homogeneous_ensemble",
 	"model_parameters": {
-		"incubation_period": 5,
-        "F_icu" : 0.05
+        "child_model":{
+            "model_class": "SEIHRD",
+            "model_parameters": {
+                "incubation_period": 5,
+                "F_icu" : 0.05
+             }
+        },
+        "modes":{
+            "training_mode": "constituent_models",
+            "predict_mode": "mean"
+        }
 	},
-    "ensemble": "False",
 	"search_space": {
 		"r0": [0.5, 3],
 		"EbyCRatio": [0.001, 70],
 		"IbyCRatio": [0.001, 2],
 		"infectious_period": [1, 10],
         "F_hospitalization" : [0, 0.125],
-        "F_fatalities" : [0.02, 0.12] 
+        "F_fatalities" : [0.02, 0.12],
+        "beta": [0, 2]
 	},
 	"search_parameters": {
 		"max_evals": 10

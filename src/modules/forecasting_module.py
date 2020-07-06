@@ -6,7 +6,7 @@ from utils.config_util import read_config_file
 from entities.forecast_variables import ForecastVariable
 import pandas as pd
 
-from utils.data_transformer_helper import convert_to_nhu_format
+from utils.data_transformer_helper import convert_to_jhu_format
 
 
 class ForecastingModule(object):
@@ -20,8 +20,8 @@ class ForecastingModule(object):
                 forecast_end_date: str):
         predictions_df = self._model.predict(region_metadata, region_observations, run_day, forecast_start_date,
                                              forecast_end_date)
-        predictions_df = convert_to_nhu_format(predictions_df, region_type, region_name, self._model_parameters['MAPE'])
-        return predictions_df.to_json()
+        predictions_df = convert_to_jhu_format(predictions_df, region_type, region_name)
+        return predictions_df
 
     def predict_old_format(self, region_type: str, region_name: str, region_metadata: dict,
                            region_observations: pd.DataFrame,
@@ -56,7 +56,7 @@ class ForecastingModule(object):
         return preddf
 
     def predict_for_region(self, data_source, region_type, region_name, run_day, forecast_start_date,
-                           forecast_end_date,):
+                           forecast_end_date):
         observations = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source)
         region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source)
         return self.predict(region_type, region_name, region_metadata, observations, run_day,

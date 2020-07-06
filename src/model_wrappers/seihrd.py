@@ -1,13 +1,16 @@
-from datetime import timedelta, datetime
-from functools import reduce
-
-from entities.forecast_variables import ForecastVariable
-from model_wrappers.base import ModelWrapperBase
-
 import numpy as np
 import pandas as pd
 
+from datetime import timedelta, datetime
+from functools import reduce, partial
+from hyperopt import hp
+
+from entities.forecast_variables import ForecastVariable
+from entities.loss_function import LossFunction
+from model_wrappers.base import ModelWrapperBase
 from seirsplus.models import *
+from utils.hyperparam_util import hyperparam_tuning
+from utils.loss_util import evaluate_for_forecast
 
 
 class SEIHRD(ModelWrapperBase):
@@ -34,6 +37,39 @@ class SEIHRD(ModelWrapperBase):
 
     def is_black_box(self):
         return True
+
+    def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,
+              train_end_date: str, search_space: dict, search_parameters: dict, train_loss_function: LossFunction):
+        result = {}
+        if self.is_black_box():
+            run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime(
+                "%-m/%-d/%y")
+            objective = partial(self.optimize, region_metadata=region_metadata, region_observations=region_observations,
+                                train_start_date=train_start_date, train_end_date=train_end_date,
+                                loss_function=train_loss_function)
+            for k, v in search_space.items():
+                search_space[k] = hp.uniform(k, v[0], v[1])
+            result = hyperparam_tuning(objective, search_space,
+                                       search_parameters.get("max_evals", 100))
+            latent_params = self.get_latent_params(region_metadata, region_observations, run_day,
+                                                   train_end_date, result["best_params"])
+            result.update(latent_params)
+
+        model_params = self.model_parameters
+        model_params.update(latent_params["latent_params"])
+        model_params.update(result["best_params"])
+        model_params["MAPE"] = result["best_loss"]
+        result["model_parameters"] = model_params
+        return {"model_parameters": model_params}
+
+    def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
+                 loss_function):
+        run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
+        predict_df = self.predict(region_metadata, region_observations, run_day, train_start_date,
+                                  train_end_date,
+                                  search_space=search_space, is_tuning=True)
+        metrics_result = evaluate_for_forecast(region_observations, predict_df, [loss_function])
+        return metrics_result[0]["value"]
 
     def get_latent_params(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, end_date: str,
                           search_space: dict = {}):
@@ -72,17 +108,17 @@ class SEIHRD(ModelWrapperBase):
         if self._is_tuning:
             initE = confirmed_dataset[run_day] * self.model_parameters.get('EbyCRatio')
             initI = confirmed_dataset[run_day] * self.model_parameters.get('IbyCRatio')
-            #initR = confirmed_dataset[run_day] * (1 - self.model_parameters.get('IbyCRatio'))
+            # initR = confirmed_dataset[run_day] * (1 - self.model_parameters.get('IbyCRatio'))
             initR = confirmed_dataset[run_day]
             initH = hospitalized_dataset[run_day]
             initF = recovered_dataset[run_day] + deceased_dataset[run_day]
         else:
             pick_day = run_day
-            while (not pick_day in self.model_parameters.get('LatentEbyCRatio')):
+            while (pick_day not in self.model_parameters.get('LatentEbyCRatio')):
                 pick_day = (datetime.strptime(pick_day, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
             initE = confirmed_dataset[run_day] * self.model_parameters.get('LatentEbyCRatio').get(pick_day)
             initI = confirmed_dataset[run_day] * self.model_parameters.get('LatentIbyCRatio').get(pick_day)
-            #initR = confirmed_dataset[run_day] * (1 - self.model_parameters.get('LatentIbyCRatio').get(pick_day))
+            # initR = confirmed_dataset[run_day] * (1 - self.model_parameters.get('LatentIbyCRatio').get(pick_day))
             initR = confirmed_dataset[run_day]
             initH = hospitalized_dataset[run_day]
             initF = recovered_dataset[run_day] + deceased_dataset[run_day]
