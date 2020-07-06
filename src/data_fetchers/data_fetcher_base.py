@@ -4,6 +4,7 @@ from typing import List
 import pandas as pd
 
 from data_fetchers.data_fetcher_utils import load_regional_metadata
+from utils.data_util import smooth_data
 
 ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})
 
@@ -65,10 +66,8 @@ class DataFetcherBase(ABC):
 
         # Rolling average with 3 day windows
         if smooth:
-            window_size, min_window_size = 3, 1
-            date_col = 3    # Beginning of date column
-            df.iloc[:, date_col:] = df.iloc[:, date_col:].rolling(
-                window_size, axis=1, min_periods=min_window_size).mean()
+            df = smooth_data(df, window_size=3)
+
         return df
 
     def get_regional_metadata(self, region_type: str, region_name: List[str], file_path: str):
