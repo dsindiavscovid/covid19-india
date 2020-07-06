@@ -301,7 +301,7 @@ def get_observations_in_range(data_source, region_name, region_type,
     return observations
 
 
-def plot(model_params, forecast_df, forecast_start_date, forecast_end_date, plot_name = 'default.png'):
+def plot(model_params, forecast_df, forecast_start_date, forecast_end_date, plot_name='default.png'):
     """
         Plot actual_confirmed cases vs forecasts.
         
@@ -371,6 +371,43 @@ def train_eval_forecast(region, region_type,
          forecast_end_date, plot_name=plot_name)
 
     return forecast_df, params, metrics, model_params
+
+
+def plot_data(region, region_type, plot_config = 'plot_config.json', plot_name = 'default.png'):
+    
+    with open(plot_config) as fin:
+        default_plot_config = json.load(fin)
+    
+    plot_config = deepcopy(default_plot_config)        
+
+    actual = DataFetcherModule.get_observations_for_region(region_type, region, smooth=False)
+    actual.drop(columns=['region_name', 'region_type'], inplace=True)
+    actual = actual.set_index('observation').transpose().reset_index()
+    actual['index'] = pd.to_datetime(actual['index'])
+    actual = actual.loc[~ (actual.select_dtypes(include=['number']) == 0).all(axis='columns'), :] # CHECK THIS
+    
+    plot_markers = plot_config['markers']
+    plot_colors = plot_config['colors']
+    plot_labels = plot_config['labels']
+    plot_variables = plot_config['variables']
+    
+    fig, ax = plt.subplots(figsize=(16, 12))
+    
+    for variable in plot_variables:
+        ax.plot(actual['index'], actual[variable], plot_markers['observed'], 
+                color = plot_colors[variable], label = plot_labels[variable])
+    
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=5))
+    ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    
+    plt.ylabel('No of People')
+    plt.xlabel('Time')
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.grid()
+    
+    plt.savefig(plot_name)
 
 
 def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_date, 
@@ -469,6 +506,7 @@ def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_d
     plt.title(train1_model_params['region'])
     plt.ylabel('No of People')
     plt.xlabel('Time')
+    plt.xticks(rotation=45)
     plt.legend()
     plt.grid()
     
@@ -562,6 +600,7 @@ def plot_m2(train2_model_params, train_start_date, train_end_date,
     plt.title(train2_model_params['region'])
     plt.ylabel('No of People')
     plt.xlabel('Time')
+    plt.xticks(rotation=45)
     plt.legend()
     plt.grid()
     
@@ -654,7 +693,7 @@ def plot_m3(train2_model_params, train1_start_date,
     plt.title(train2_model_params['region'])
     plt.ylabel('No of People')
     plt.xlabel('Time')
-    plt.xticks(rotation=90)
+    plt.xticks(rotation=45)
     plt.legend()
     plt.grid()
     
