@@ -1,10 +1,12 @@
 import mlflow
+import datetime
+import pandas as pd
+
 
 TRACKING_URL = "http://ec2-54-175-207-176.compute-1.amazonaws.com"
 
 
-def log_to_mlflow(params, metrics, artifact_dir, artifacts,
-                  experiment_name="default", run_name=None, tracking_url=TRACKING_URL):
+def log_to_mlflow(params, metrics, artifact_dir, artifacts, experiment_name="default", run_name=None):
     """Logs metrics, parameters and artifacts to MLflow
 
     Args:
@@ -14,14 +16,13 @@ def log_to_mlflow(params, metrics, artifact_dir, artifacts,
         artifacts (list[str]): list of files to be logged
         experiment_name (str): name of the MLflow experiment (default: "default")
         run_name (str): name of the MLflow run (default: None)
-        tracking_url (str): MLflow tracking server URL (default: TRACKING_URL)
 
     Assumptions:
         The params and metrics dicts are flattened out (no nesting)
 
     """
 
-    mlflow.set_tracking_uri(tracking_url)
+    mlflow.set_tracking_uri(TRACKING_URL)
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(run_name=run_name):
@@ -29,3 +30,37 @@ def log_to_mlflow(params, metrics, artifact_dir, artifacts,
         mlflow.log_metrics(metrics)
         for artifact in artifacts:
             mlflow.log_artifact(artifact_dir + artifact)
+
+
+def get_previous_runs(experiment_name, region, interval=0):
+    """Get links of previous runs for a region in the last n=interval days
+
+    Args:
+        experiment_name (str): name of the MLflow experiment
+        region (str): name of region # list?
+        interval (int, optional): number of days prior to current day to start search at
+
+    Returns:
+        pd.DataFrame: links to relevant runs
+    """
+    start_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(interval)
+    start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    experiment = mlflow.get_experiment_by_name(experiment_name)
+    experiment_id = experiment.experiment_id
+
+    components = [TRACKING_URL, '#/experiments', experiment_id, 'runs']
+    prefix = "/".join(components)
+
+    query = "params.region = '{}'".format(region)
+    runs_df = mlflow.search_runs(experiment_ids=experiment_id, filter_string=query)
+
+    runs_df = runs_df[runs_df['start_time'] >= start_date]
+    run_ids = runs_df['run_id']
+
+    links = ["/".join([prefix, run_id]) for run_id in run_ids]
+    links_df = pd.DataFrame({'published on': runs_df['start_time'], 'link to run': links})
+    links_df['published on'] = links_df['published on'].apply(lambda x: x.date())
+    links_df.index += 1
+
+    return links_df
