@@ -53,8 +53,8 @@
        "date_of_interest": "6/6/20",
        "column_of_interest": "confirmed",
        "percentiles": [40, 50, 90],
-       "ci": 5,
-       "window": 1,
+       "ci": [95],
+       "tolerance": 1,
        "param_key_of_interest": "r0"
    }
 	},
