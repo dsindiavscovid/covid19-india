@@ -5,7 +5,6 @@ from copy import deepcopy
 from datetime import timedelta, datetime
 from functools import reduce, partial
 from hyperopt import hp
-from cachetools import cached, TTLCache
 
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
@@ -29,6 +28,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         else:
             self.weights = None
 
+        # Initialize each constituent model
         for idx in self.models:
             constituent_model = self.models[idx]
             constituent_model_class = constituent_model['model_class']
@@ -66,8 +66,8 @@ class HeterogeneousEnsemble(ModelWrapperBase):
                  loss_function):
         run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
         predict_df = self.predict_mean(region_metadata, region_observations, run_day, train_start_date,
-                                  train_end_date,
-                                  search_space=search_space, is_tuning=True)
+                                       train_end_date,
+                                       search_space=search_space, is_tuning=True)
         metrics_result = evaluate_for_forecast(region_observations, predict_df, [loss_function])
         return metrics_result[0]["value"]
 
@@ -78,8 +78,20 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         else:
             return self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date, **kwargs)
 
-    # @cached(cache=TTLCache(maxsize=2000, ttl=3600))
     def get_predictions_dict(self, region_metadata, region_observations, run_day, start_date, end_date):
+        """Gets predictions for all constituent models
+
+        Args:
+            region_metadata (dict): region metadata
+            region_observations (pd.Dataframe): dataframe of case counts
+            run_day (str): prediction run day
+            start_date (str): prediction start date
+            end_date (str): prediction end date
+
+        Returns:
+            dict(str:pd.DataFrame): dictionary of the form {index: predictions} for constituent models
+        """
+
         predictions_df_dict = dict()
         for idx in self.models:
             model = self.models[idx]
@@ -89,22 +101,58 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
     def predict_mean(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                      end_date: str, **kwargs):
+        """Gets weighted mean predictions using constituent models
+
+        Args:
+            region_metadata (dict): region metadata
+            region_observations (pd.Dataframe): dataframe of case counts
+            run_day (str): prediction run day
+            start_date (str): prediction start date
+            end_date (str): prediction end date
+            **kwargs: keyword arguments
+
+        Returns:
+            pd.DataFrame: mean predictions
+        """
+
         search_space = kwargs.get("search_space", {})
         self.model_parameters.update(search_space)
         beta = self.model_parameters['beta']
+
+        # Get predictions from constituent models
         predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
                                                         run_day, start_date, end_date)
+
+        # Calculate weights for constituent models as exp(-beta*loss)
         self.weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+
+        # Get weighted predictions of constituent models
         predictions_df_dict = get_weighted_predictions(predictions_df_dict, self.weights)
+
+        # Compute mean predictions
         mean_predictions_df = reduce(lambda left, right: left.add(right), predictions_df_dict.values())
         if sum(self.weights.values()) != 0:
             mean_predictions_df = mean_predictions_df.div(sum(self.weights.values()))
         mean_predictions_df.reset_index(inplace=True)
+
         return mean_predictions_df
 
     def predict_with_uncertainty(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
                                  start_date: str, end_date: str, **kwargs):
-        # refactor
+        """Get predictions for percentiles and confidence intervals, and (optionally) mean predictions
+
+        Args:
+            region_metadata (dict): region metadata
+            region_observations (pd.Dataframe): dataframe of case counts
+            run_day (str): prediction run day
+            start_date (str): prediction start date
+            end_date (str): prediction end date
+            **kwargs: keyword arguments
+
+        Returns:
+            pd.DataFrame: dataframe with predictions for percentiles and confidence intervals,
+                and optionally mean predictions
+        """
 
         # Unpack uncertainty parameters
         uncertainty_params = self.model_parameters['uncertainty_parameters']
@@ -112,21 +160,21 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         column_of_interest = uncertainty_params['column_of_interest']
         include_mean = uncertainty_params['include_mean']
         percentiles = uncertainty_params['percentiles']
-        ci = uncertainty_params['ci']  # multiple confidence intervals?
-        alpha = 100 - ci
-        confidence_intervals = {"low": alpha/2, "high": 100-alpha/2}
-        # tolerance = uncertainty_params['tolerance']
-        window = uncertainty_params['window']
+        ci = uncertainty_params['ci']
+        confidence_intervals = []
+        for c in ci:
+            confidence_intervals.extend([50 - c/2, 50 + c/2])
+        tolerance = uncertainty_params['tolerance']
 
         percentiles_dict = dict()
-        percentiles_forecast = dict()
+        percentiles_predictions = dict()
 
         # Get predictions, mean predictions and weighted predictions
         predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
                                                         run_day, start_date, end_date)
         mean_predictions_df = self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date)
 
-        # Get predictions on date of interest
+        # Get predictions for a specific column on date of interest
         trials_df = create_trials_dataframe(predictions_df_dict, column_of_interest)
         try:
             predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
@@ -141,23 +189,24 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         df['cdf'] = pdf_to_cdf(df['pdf'])
 
         # Get indices for percentiles and confidence intervals
-        for p in percentiles:
-            percentiles_dict[p] = get_best_index(df, p, window)
-        for c in confidence_intervals:
-            percentiles_dict[c] = get_best_index(df, confidence_intervals[c], window)
+        for p in percentiles + confidence_intervals:
+            percentiles_dict[p] = get_best_index(df, p, tolerance)
+        # for c in confidence_intervals:
+        #     percentiles_dict[c] = get_best_index(df, confidence_intervals[c], tolerance)
 
         # Create dictionary of dataframes for percentiles
         for key in percentiles_dict.keys():
-            percentiles_forecast[key] = {}
+            percentiles_predictions[key] = {}
             df_predictions = predictions_df_dict[percentiles_dict[key]]
-            percentiles_forecast[key]['df_prediction'] = df_predictions
+            percentiles_predictions[key]['df_prediction'] = df_predictions
 
-        percentiles_forecast = uncertainty_dict_to_df(percentiles_forecast)
+        # Create percentiles dataframe
+        percentiles_predictions = uncertainty_dict_to_df(percentiles_predictions)
 
-        # Include mean predictions if include_mean is True
+        # Include mean predictions in dataframe if include_mean is True
         if include_mean:
-            # TODO: RESOLVE DATE TYPES AND USE A JOIN
-            percentiles_forecast = pd.concat([mean_predictions_df, percentiles_forecast], axis=1)
-            percentiles_forecast.drop(columns='predictionDate', inplace=True)
+            # TODO: RESOLVE DATE TYPES AND USE A JOIN INSTEAD OF CONCAT
+            percentiles_predictions = pd.concat([mean_predictions_df, percentiles_predictions], axis=1)
+            percentiles_predictions.drop(columns='predictionDate', inplace=True)
 
-        return percentiles_forecast
+        return percentiles_predictions
