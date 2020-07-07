@@ -216,12 +216,40 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             return super().train(region_metadata, region_observations, train_start_date,
               train_end_date, onlyBetaSearchSpace, search_parameters, train_loss_function)
         elif(self.model_parameters['modes']['training_mode'] == 'constituent_models'):
-            if('beta' in search_parameters.keys()):
-                search_parameters.drop('beta')
+            if('beta' in search_space.keys()):
+                search_space.pop('beta')
             return self.train_for_ensemble(region_metadata, region_observations, train_start_date,
               train_end_date, search_space, search_parameters, train_loss_function)
-        else:
-            print("TO BE IMPLEMENTED")
+        elif(self.model_parameters['modes']['training_mode'] == 'full'):
+            onlyBetaSearchSpace = dict()
+            onlyBetaSearchSpace['beta'] = copy.deepcopy(search_space['beta'])
+            search_space.pop('beta')
+            ndays = (datetime.strptime(train_end_date, "%m/%d/%y") - (datetime.strptime(train_start_date, "%m/%d/%y"))).days
+            
+            train1_end_date = (datetime.strptime(train_start_date, "%m/%d/%y") + timedelta(days=ndays//2)).strftime("%-m/%-d/%y")
+            train2_start_date = (datetime.strptime(train1_end_date, "%m/%d/%y") + timedelta(days=1)).strftime("%-m/%-d/%y")
+            self.train_for_ensemble(region_metadata, region_observations, train_start_date,
+              train1_end_date, search_space, search_parameters, train_loss_function)
+            
+            self.models = copy.deepcopy(self.model_parameters['constituent_models'])
+            self.losses = copy.deepcopy(self.model_parameters['constituent_model_losses'])
+
+            if 'constituent_model_weights' in self.model_parameters:
+                self.weights = deepcopy(self.model_parameters['constituent_model_weights'])
+            else:
+                self.weights = None
+
+            for idx in self.models:
+                constituent_model = self.models[idx]
+                constituent_model_class = constituent_model['model_class']
+                constituent_model_parameters = constituent_model['model_parameters']
+                self.models[idx] = model_factory_alias.ModelFactory.get_model(
+                    constituent_model_class, constituent_model_parameters)
+           
+            resultsBeta = super().train(region_metadata, region_observations, train_start_date,
+              train_end_date, onlyBetaSearchSpace, search_parameters, train_loss_function)
+            self.model_parameters.update(resultsBeta['model_parameters'])
+            return self.model_parameters
             
             
     def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
