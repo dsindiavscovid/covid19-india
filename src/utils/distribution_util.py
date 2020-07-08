@@ -10,9 +10,9 @@ def get_best_index(df, percentile, tolerance=1):
     """Gets the index of the row with lowest loss corresponding to a percentile (within a tolerance limit)
 
     Args:
-        df (pd.Dataframe): dataframe with cdf and loss index (lower index indicates lower loss)
+        df (pd.DataFrame): dataframe with cdf and loss index (lower index indicates lower loss)
         percentile (int): percentile for which row index is to be found
-        tolerance (int, optional): tolerance limit for percentile (default: 0.01)
+        tolerance (int, optional): tolerance limit for percentile (default: 1%)
 
     Returns:
         str: index of the row with lowest loss corresponding to the percentile (within a tolerance limit)

@@ -105,7 +105,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         Args:
             region_metadata (dict): region metadata
-            region_observations (pd.Dataframe): dataframe of case counts
+            region_observations (pd.DataFrame): dataframe of case counts
             run_day (str): prediction run day
             start_date (str): prediction start date
             end_date (str): prediction end date
@@ -143,7 +143,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         Args:
             region_metadata (dict): region metadata
-            region_observations (pd.Dataframe): dataframe of case counts
+            region_observations (pd.DataFrame): dataframe of case counts
             run_day (str): prediction run day
             start_date (str): prediction start date
             end_date (str): prediction end date

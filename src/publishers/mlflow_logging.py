@@ -43,6 +43,7 @@ def get_previous_runs(experiment_name, region, interval=0):
     Returns:
         pd.DataFrame: links to relevant runs
     """
+
     start_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(interval)
     start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
 

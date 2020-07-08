@@ -35,7 +35,7 @@ class TrainingModule(object):
                                                    config.train_end_date,
                                                    config.search_space,
                                                    config.search_parameters, config.training_loss_function)
-        if config.model_class.name != "homogeneous_ensemble":  # FIXME
+        if "ensemble" not in config.model_class.name:
             config.model_parameters.update(
                 results["model_parameters"])  # updating model parameters with best params found above
             model_evaluator = ModelEvaluator(config.model_class, config.model_parameters)
