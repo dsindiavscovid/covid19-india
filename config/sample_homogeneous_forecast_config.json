@@ -56,7 +56,6 @@
        "ci": [95],
        "tolerance": 1,
        "param_key_of_interest": "r0"
-   }
-	},
-	"output_filepath": ""
+       }
+	}
 }
