@@ -32,23 +32,6 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
     
     def supported_forecast_variables(self):
         return [ForecastVariable.confirmed, ForecastVariable.recovered, ForecastVariable.active]
-        
-    def get_mean_params(self):
-        if(self.weights == None):
-            self.weights = {idx: np.exp(-self.model_parameters['beta'] * loss) for idx, loss in self.losses.items()}
-        sum_of_weights = sum(self.weights.values())
-        
-        constituent_dict = self.model_parameters['constituent_models']
-        mean_params = dict()
-        for key in constituent_dict.keys():
-            temp_params = constituent_dict[key]['model_parameters']
-            for param_key in temp_params.keys():
-                if(param_key in mean_params.keys()):
-                    mean_params[keys] += (temp_params[param_key] * self.weights[key])/(sum_of_weights)
-                else:
-                    mean_params[keys] = (temp_params[param_key] * self.weights[key])/(sum_of_weights)
-        
-        return mean_params
     
     def update_nested_dict(self, meandict, x, key):
         if(type(x) == dict):
