@@ -3,18 +3,15 @@ import numpy as np
 
 import copy
 from datetime import timedelta, datetime
-from functools import reduce, partial
+from functools import partial
 from hyperopt import hp
-from cachetools import cached, TTLCache
 
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
-from model_wrappers.base import ModelWrapperBase
 import model_wrappers.model_factory as model_factory_alias
-from utils.ensemble_util import get_weighted_predictions, create_trials_dataframe, uncertainty_dict_to_df
+from utils.ensemble_util import uncertainty_dict_to_df
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
-from utils.hyperparam_util import hyperparam_tuning, hyperparam_tuning_ensemble
-from utils.loss_util import evaluate_for_forecast
+from utils.hyperparam_util import hyperparam_tuning_ensemble
 from model_wrappers.heterogeneous_ensemble import HeterogeneousEnsemble
 
 class HomogeneousEnsemble(HeterogeneousEnsemble):
@@ -50,8 +47,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
     def get_mean_params(self):
         if(self.weights == None):
             self.weights = {idx: np.exp(-self.model_parameters['beta'] * loss) for idx, loss in self.losses.items()}
-        sum_of_weights = sum(self.weights.values())
-        
+
         constituent_dict = self.model_parameters['constituent_models']
         mean_params = dict()
         for idx in constituent_dict.keys():
@@ -115,7 +111,6 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         prediction_df = mean_param_model.predict(region_metadata, region_observations, run_day, start_date, end_date)
         return prediction_df
           
-    # @cached(cache=TTLCache(maxsize=2000, ttl=3600))
     def get_predictions_dict_some_indexes(self, region_metadata, region_observations, run_day, start_date, end_date, indexes):
         predictions_df_dict = dict()
         for idx in indexes:
@@ -156,8 +151,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         
     def train_for_ensemble(self, region_metadata, region_observations, train_start_date, train_end_date, search_space,
                            search_parameters, train_loss_function):
-        # TODO: REMOVE THIS AND MERGE WITH HARSH'S IMPLEMENTATION
-        
+
         child_model_parameters = self.model_parameters['child_model']['model_parameters']   
         
         child_model = model_factory_alias.ModelFactory.get_model(self.child_model_class, child_model_parameters)
@@ -171,10 +165,8 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                                                      search_parameters.get("max_evals", 100))
             run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime(
                 "%-m/%-d/%y")
-            model_params = child_model_parameters
             constituent_models = dict()
             constituent_model_losses = dict()
-            debug_dict = dict()
             for i in range(len(result_list)):
                 result = result_list[i]
                 model_params = copy.deepcopy(child_model_parameters)
@@ -210,7 +202,6 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             ndays = (datetime.strptime(train_end_date, "%m/%d/%y") - (datetime.strptime(train_start_date, "%m/%d/%y"))).days
             
             train1_end_date = (datetime.strptime(train_start_date, "%m/%d/%y") + timedelta(days=ndays//2)).strftime("%-m/%-d/%y")
-            train2_start_date = (datetime.strptime(train1_end_date, "%m/%d/%y") + timedelta(days=1)).strftime("%-m/%-d/%y")
             self.train_for_ensemble(region_metadata, region_observations, train_start_date,
               train1_end_date, search_space, search_parameters, train_loss_function)
             
@@ -218,7 +209,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             self.losses = copy.deepcopy(self.model_parameters['constituent_model_losses'])
 
             if 'constituent_model_weights' in self.model_parameters:
-                self.weights = deepcopy(self.model_parameters['constituent_model_weights'])
+                self.weights = copy.deepcopy(self.model_parameters['constituent_model_weights'])
             else:
                 self.weights = None
 
@@ -253,14 +244,3 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         
         else:
              raise Exception("Invalid Predict Mode")
-        
-             
-           
-           
-        
-           
-            
-        
-            
-    
-    
