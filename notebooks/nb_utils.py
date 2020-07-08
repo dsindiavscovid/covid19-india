@@ -79,7 +79,7 @@ def train_eval(region, region_type,
                train1_start_date, train1_end_date, 
                train2_start_date, train2_end_date, run_day,
                test_start_date, test_end_date,
-               default_train_config, default_test_config,
+               default_train_config, default_test_config, default_forecast_config,
                max_evals = 1000, data_source = None, 
                mlflow_log = True, name_prefix = None):
     """
@@ -157,11 +157,11 @@ def train_eval(region, region_type,
         train_config['output_filepath'] = name_prefix + '_train1_output.json'
 
     train_module_config = TrainingModuleConfig.parse_obj(train_config)
-    trainResults = TrainingModule.from_config(train_module_config)
+    train_results = TrainingModule.from_config(train_module_config)
 
     train1MAPE = 0
     train1RMSLE = 0
-    for metric in trainResults['train_metric_results']:
+    for metric in train_results['train_metric_results']:
         if metric['metric_name'] == 'mape':
             train1MAPE += metric['value']
         if metric['metric_name'] == 'rmsle':
@@ -169,8 +169,8 @@ def train_eval(region, region_type,
 
     metrics['Train1RMLSE'] = train1RMSLE
     metrics['Train1MAPE'] = train1MAPE 
-    metrics.update(parse_metrics(trainResults['train_metric_results'], 'Train1')) 
-    train1_model_params['model_parameters'] = trainResults['model_parameters']
+    metrics.update(parse_metrics(train_results['train_metric_results'], 'Train1'))
+    train1_model_params['model_parameters'] = train_results['model_parameters']
     
     test_config = deepcopy(default_test_config)
     test_config['data_source'] = data_source
@@ -179,7 +179,7 @@ def train_eval(region, region_type,
     test_config['test_start_date'] = test_start_date
     test_config['test_end_date'] = test_end_date
     test_config['run_day'] = run_day
-    test_config['model_parameters'].update(trainResults['model_parameters'])
+    test_config['model_parameters'].update(train_results['model_parameters'])
         
     if mlflow_log:
         test_config['output_filepath'] = 'test_output.json'
@@ -187,11 +187,11 @@ def train_eval(region, region_type,
         test_config['output_filepath'] = name_prefix + '_test_output.json'
 
     test_module_config = ModelEvaluatorConfig.parse_obj(test_config) 
-    evalResults = ModelEvaluator.from_config(test_module_config)
+    eval_results = ModelEvaluator.from_config(test_module_config)
     
     testMAPE = 0
     testRMSLE = 0
-    for metric in evalResults:
+    for metric in eval_results:
         if metric['metric_name'] == 'mape':
             testMAPE += metric['value']
         if metric['metric_name'] == 'rmsle':
@@ -199,28 +199,28 @@ def train_eval(region, region_type,
 
     metrics['TestMAPE'] = testMAPE
     metrics['TestRMLSE'] = testRMSLE
-    metrics.update(parse_metrics(evalResults, 'Test')) 
+    metrics.update(parse_metrics(eval_results, 'Test'))
     
-    finalTrain_config = deepcopy(default_train_config)
-    finalTrain_config['data_source'] = data_source
-    finalTrain_config['region_name'] = region
-    finalTrain_config['region_type'] = region_type
-    finalTrain_config['train_start_date'] = train2_start_date
-    finalTrain_config['train_end_date'] = train2_end_date
-    finalTrain_config['search_parameters']['max_evals'] = max_evals
+    final_train_config = deepcopy(default_train_config)
+    final_train_config['data_source'] = data_source
+    final_train_config['region_name'] = region
+    final_train_config['region_type'] = region_type
+    final_train_config['train_start_date'] = train2_start_date
+    final_train_config['train_end_date'] = train2_end_date
+    final_train_config['search_parameters']['max_evals'] = max_evals
     
     if mlflow_log:
-        finalTrain_config['output_filepath'] = 'train2_output.json'
+        final_train_config['output_filepath'] = 'train2_output.json'
     else:
-        finalTrain_config['output_filepath'] = name_prefix + '_train2_output.json'
+        final_train_config['output_filepath'] = name_prefix + '_train2_output.json'
 
-    finalTrain_module_config = TrainingModuleConfig.parse_obj(finalTrain_config)
-    finalResults = TrainingModule.from_config(finalTrain_module_config)
+    final_train_module_config = TrainingModuleConfig.parse_obj(final_train_config)
+    final_results = TrainingModule.from_config(final_train_module_config)
     
 
     train2MAPE = 0
     train2RMSLE = 0
-    for metric in finalResults['train_metric_results']:
+    for metric in final_results['train_metric_results']:
         if metric['metric_name'] == 'mape':
             train2MAPE += metric['value']
         if metric['metric_name'] == 'rmsle':
@@ -228,10 +228,10 @@ def train_eval(region, region_type,
 
     metrics['Train2MAPE'] = train2MAPE
     metrics['Train2RMLSE'] = train2RMSLE
-    metrics.update(parse_metrics(finalResults['train_metric_results'], 'Train2')) 
+    metrics.update(parse_metrics(final_results['train_metric_results'], 'Train2'))
     
-    model_params['model_parameters'] = finalResults['model_parameters']
-    train2_model_params['model_parameters'] = finalResults['model_parameters']
+    model_params['model_parameters'] = final_results['model_parameters']
+    train2_model_params['model_parameters'] = final_results['model_parameters']
     
     return params, metrics, train1_model_params, train2_model_params
 
@@ -249,17 +249,17 @@ def forecast(model_params, run_day, forecast_start_date, forecast_end_date,
     Returns:
         forecast_df : Dataframe containing forecasts
     """
-    evalConfig = ForecastingModuleConfig.parse_obj(default_forecast_config)
-    evalConfig.data_source = model_params['data_source']
-    evalConfig.region_name = model_params['region']
-    evalConfig.region_type = model_params['region_type']
-    evalConfig.model_parameters = model_params['model_parameters']
+    eval_config = ForecastingModuleConfig.parse_obj(default_forecast_config)
+    eval_config.data_source = model_params['data_source']
+    eval_config.region_name = model_params['region']
+    eval_config.region_type = model_params['region_type']
+    eval_config.model_parameters = model_params['model_parameters']
 
-    evalConfig.run_day = run_day
-    evalConfig.forecast_start_date = forecast_start_date
-    evalConfig.forecast_end_date = forecast_end_date
+    eval_config.run_day = run_day
+    eval_config.forecast_start_date = forecast_start_date
+    eval_config.forecast_end_date = forecast_end_date
     
-    forecast_df = ForecastingModule.from_config(evalConfig)
+    forecast_df = ForecastingModule.from_config(eval_config)
     forecast_df = forecast_df.drop(columns=['Region Type', 'Region', 'Country', 'Lat', 'Long'])
     forecast_df = forecast_df.set_index('prediction_type')
     forecast_df = forecast_df.transpose().reset_index()
@@ -268,7 +268,7 @@ def forecast(model_params, run_day, forecast_start_date, forecast_end_date,
 
 def get_observations_in_range(data_source, region_name, region_type, 
                               start_date, end_date,
-                              obs_type = 'confirmed'):
+                              obs_type='confirmed'):
     """
         Return a list of counts of obs_type cases
         from the region in the specified date range.
@@ -316,13 +316,11 @@ def plot(model_params, forecast_df, forecast_start_date, forecast_end_date, plot
     data_source = model_params['data_source']
     region_name = model_params['region']
     region_type = model_params['region_type']
-    actual_observations = DataFetcherModule.get_observations_for_region(region_name, region_type, data_source)
-    
+
     # Get relevant time-series of actual counts from actual_observations
-    actual_observations = get_observations_in_range(region_name, region_type, 
-                                                    forecast_start_date, 
-                                                    forecast_end_date,
-                                                    obs_type = 'confirmed')
+    actual_observations = get_observations_in_range(data_source, region_name, region_type,
+                                                    forecast_start_date, forecast_end_date,
+                                                    obs_type='confirmed')
     
     forecast_df['actual_confirmed'] = actual_observations
     
@@ -373,7 +371,7 @@ def train_eval_forecast(region, region_type,
     return forecast_df, params, metrics, model_params
 
 
-def plot_data(region, region_type, plot_config = 'plot_config.json', plot_name = 'default.png'):
+def plot_data(region, region_type, plot_config='plot_config.json', plot_name='default.png'):
     
     with open(plot_config) as fin:
         default_plot_config = json.load(fin)
@@ -395,7 +393,7 @@ def plot_data(region, region_type, plot_config = 'plot_config.json', plot_name =
     
     for variable in plot_variables:
         ax.plot(actual['index'], actual[variable], plot_markers['observed'], 
-                color = plot_colors[variable], label = plot_labels[variable])
+                color=plot_colors[variable], label=plot_labels[variable])
     
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=5))
     ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
@@ -410,11 +408,9 @@ def plot_data(region, region_type, plot_config = 'plot_config.json', plot_name =
     plt.savefig(plot_name)
 
 
-def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_date, 
-            test_run_day, test_start_date, test_end_date, 
-            rolling_average = False, uncertainty = False, 
-            forecast_config = 'forecast_config.json',
-            plot_config = 'plot_config.json', plot_name = 'default.png'):
+def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_date, test_run_day, test_start_date,
+            test_end_date, forecast_config, uncertainty=False, rolling_average=False, plot_config='plot_config.json',
+            plot_name='default.png'):
     """
         M1 plot consisting of:
             - Actuals for train1 and test intervals
@@ -431,14 +427,11 @@ def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_d
     plot_config['uncertainty'] = uncertainty
     plot_config['rolling_average'] = rolling_average
     
-    actual_start_date = (datetime.strptime(train1_start_date, "%m/%d/%y") - timedelta(days=7)).strftime("%-m/%-d/%y")    
-
-    with open(forecast_config) as fin:
-        default_forecast_config = json.load(fin)
+    actual_start_date = (datetime.strptime(train1_start_date, "%m/%d/%y") - timedelta(days=7)).strftime("%-m/%-d/%y")
     
     # Get predictions
-    pd_df_train = forecast(train1_model_params, train1_run_day, train1_start_date, train1_end_date, default_forecast_config)
-    pd_df_test = forecast(train1_model_params, test_run_day, test_start_date, test_end_date, default_forecast_config)
+    pd_df_train = forecast(train1_model_params, train1_run_day, train1_start_date, train1_end_date, forecast_config)
+    pd_df_test = forecast(train1_model_params, test_run_day, test_start_date, test_end_date, forecast_config)
     
     pd_df_train['index'] = pd.to_datetime(pd_df_train['index'])
     pd_df_test['index'] = pd.to_datetime(pd_df_test['index']) 
@@ -477,7 +470,7 @@ def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_d
                         color = plot_colors[variable], label = plot_labels[variable]+': Predicted')
 
             # Plot uncertainty in predictions
-            if plot_config['uncertainty'] == True:
+            if plot_config['uncertainty']:
 
                 if variable+'_min' in pd_df:
                     ax.plot(pd_df['index'], pd_df[variable+'_min'], plot_markers['predicted']['min'], 
@@ -513,11 +506,9 @@ def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_d
     plt.savefig(plot_name)
 
     
-def plot_m2(train2_model_params, train_start_date, train_end_date, 
-            test_run_day, test_start_date, test_end_date, 
-            rolling_average = False, uncertainty = False, 
-            forecast_config = 'forecast_config.json',
-            plot_config = 'plot_config.json', plot_name = 'default.png'):
+def plot_m2(train2_model_params, train_start_date, train_end_date, test_run_day, test_start_date, test_end_date,
+            forecast_config, uncertainty=False, rolling_average=False, plot_config='plot_config.json',
+            plot_name='default.png'):
     """
         M2 plot consisting of:
             - Actuals for train2 interval and preceding weeks
@@ -526,10 +517,8 @@ def plot_m2(train2_model_params, train_start_date, train_end_date,
     """
     
     ## TODO: Log scale
-    with open(plot_config) as fplot, \
-    open(forecast_config) as fcast:
+    with open(plot_config) as fplot:
         default_plot_config = json.load(fplot)
-        default_forecast_config = json.load(fcast)
     
     plot_config = deepcopy(default_plot_config)
     plot_config['uncertainty'] = uncertainty
@@ -538,7 +527,7 @@ def plot_m2(train2_model_params, train_start_date, train_end_date,
     actual_start_date = (datetime.strptime(test_start_date, "%m/%d/%y") - timedelta(days=14)).strftime("%-m/%-d/%y")    
     
     # Get predictions
-    pd_df_test = forecast(train2_model_params, test_run_day, test_start_date, test_end_date, default_forecast_config)
+    pd_df_test = forecast(train2_model_params, test_run_day, test_start_date, test_end_date, forecast_config)
     
     pd_df_test['index'] = pd.to_datetime(pd_df_test['index']) 
     pd_df = pd_df_test.sort_values(by=['index'])
@@ -573,7 +562,7 @@ def plot_m2(train2_model_params, train_start_date, train_end_date,
                     color = plot_colors[variable], label = plot_labels[variable]+': Predicted')
         
         # Plot uncertainty in predictions
-        if plot_config['uncertainty'] == True:
+        if plot_config['uncertainty']:
             
             if variable+'_min' in pd_df:
                 ax.plot(pd_df['index'], pd_df[variable+'_min'], plot_markers['predicted']['min'], 
@@ -607,11 +596,8 @@ def plot_m2(train2_model_params, train_start_date, train_end_date,
     plt.savefig(plot_name)
 
     
-def plot_m3(train2_model_params, train1_start_date, 
-            forecast_start_date, forecast_length, 
-            rolling_average = False, uncertainty = False,
-            forecast_config = 'forecast_config.json',
-            plot_config = 'plot_config.json', plot_name = 'default.png'):
+def plot_m3(train2_model_params, train1_start_date, forecast_start_date, forecast_length, forecast_config,
+            rolling_average=False, uncertainty=False, plot_config='plot_config.json', plot_name='default.png'):
     """
         M3 plot consisting of:
             - Forecast from forecast_start_date
@@ -620,11 +606,8 @@ def plot_m3(train2_model_params, train1_start_date,
     
     ## TODO: Log scale
     
-    with open(plot_config) as fplot, \
-        open(forecast_config) as fcast:
+    with open(plot_config) as fplot:
         default_plot_config = json.load(fplot)
-        default_forecast_config = json.load(fcast)
-    
     
     plot_config = deepcopy(default_plot_config)
     plot_config['uncertainty'] = uncertainty
@@ -635,7 +618,7 @@ def plot_m3(train2_model_params, train1_start_date,
     forecast_end_date = (datetime.strptime(forecast_start_date, "%m/%d/%y") + timedelta(days=forecast_length)).strftime("%-m/%-d/%y")
     
     # Get predictions
-    pd_df_forecast = forecast(train2_model_params, forecast_run_day, forecast_start_date, forecast_end_date, default_forecast_config)
+    pd_df_forecast = forecast(train2_model_params, forecast_run_day, forecast_start_date, forecast_end_date, forecast_config)
     
     pd_df_forecast['index'] = pd.to_datetime(pd_df_forecast['index']) 
     pd_df = pd_df_forecast.sort_values(by=['index'])
@@ -670,7 +653,7 @@ def plot_m3(train2_model_params, train1_start_date,
                     color = plot_colors[variable], label = plot_labels[variable]+': Predicted')
         
         # Plot uncertainty in predictions
-        if plot_config['uncertainty'] == True:
+        if plot_config['uncertainty']:
             
             if variable+'_min' in pd_df:
                 ax.plot(pd_df['index'], pd_df[variable+'_min'], plot_markers['predicted']['min'], 
@@ -731,12 +714,13 @@ def set_dates(current_day):
     dates['test_run_day'] = test_run_day.strftime("%-m/%-d/%y")
     
     return dates
-    
+
+
 def train_eval_plot(region, region_type, 
                     current_day, forecast_length,
-                    default_train_config, default_test_config,
-                    max_evals = 1000, data_source = None,
-                    mlflow_log = False, mlflow_run_name = None):
+                    default_train_config, default_test_config, default_forecast_config,
+                    max_evals=1000, data_source=None,
+                    mlflow_log=False, mlflow_run_name=None):
     
     """
         Run train, evaluation and plotting. 
@@ -776,28 +760,27 @@ def train_eval_plot(region, region_type,
     test_run_day = dates['test_run_day']
     
     params, metrics, train1_params, train2_params = train_eval(region, region_type, 
-                                                           train1_start_date, train1_end_date, 
-                                                           train2_start_date, train2_end_date, train2_run_day,
-                                                           test_start_date, test_end_date,
-                                                           default_train_config, default_test_config,
-                                                           max_evals = max_evals, data_source = data_source, 
-                                                           mlflow_log = mlflow_log,
-                                                           name_prefix = name_prefix)
+                                                               train1_start_date, train1_end_date,
+                                                               train2_start_date, train2_end_date, train2_run_day,
+                                                               test_start_date, test_end_date,
+                                                               default_train_config, default_test_config,
+                                                               default_forecast_config,
+                                                               max_evals=max_evals, data_source=data_source,
+                                                               mlflow_log=mlflow_log,
+                                                               name_prefix=name_prefix)
 
-    plot_m1(train1_params, train1_run_day, train1_start_date, train1_end_date, 
-        test_run_day, test_start_date, test_end_date, 
-        rolling_average = False, uncertainty = False, 
-        plot_config = 'plot_config.json', plot_name = name_prefix+'_m1.png')
+    plot_m1(train1_params, train1_run_day, train1_start_date, train1_end_date, test_run_day, test_start_date,
+            test_end_date, default_forecast_config, plot_name=name_prefix + '_m1.png')
 
-    plot_m2(train2_params, train1_start_date, train1_end_date, 
-        test_run_day, test_start_date, test_end_date, plot_name = name_prefix+ '_m2.png')
+    plot_m2(train2_params, train1_start_date, train1_end_date, test_run_day, test_start_date, test_end_date,
+            default_forecast_config, plot_name=name_prefix + '_m2.png')
 
     forecast_start_date = (datetime.strptime(train2_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
-    plot_m3(train2_params, train1_start_date, 
-            forecast_start_date, forecast_length, plot_name = name_prefix +'_m3.png')
+    plot_m3(train2_params, train1_start_date, forecast_start_date, forecast_length, default_forecast_config,
+            plot_name=name_prefix + '_m3.png')
     
     if mlflow_log:
-        with mlflow.start_run(run_name = mlflow_run_name):
+        with mlflow.start_run(run_name=mlflow_run_name):
             mlflow.log_params(params)
             mlflow.log_metrics(metrics)
             mlflow.log_artifact(name_prefix+'_m1.png')
