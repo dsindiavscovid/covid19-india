@@ -35,7 +35,8 @@ class TrainingModule(object):
                                                    config.train_end_date,
                                                    config.search_space,
                                                    config.search_parameters, config.training_loss_function)
-        if "ensemble" not in config.model_class.name:
+        
+        if(not ("modes" in config.model_parameters.keys() and config.model_parameters['modes']['training_mode'] == 'constituent_models')):
             config.model_parameters.update(
                 results["model_parameters"])  # updating model parameters with best params found above
             model_evaluator = ModelEvaluator(config.model_class, config.model_parameters)

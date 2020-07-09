@@ -223,7 +223,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             resultsBeta = super().train(region_metadata, region_observations, train_start_date,
               train_end_date, onlyBetaSearchSpace, search_parameters, train_loss_function)
             self.model_parameters.update(resultsBeta['model_parameters'])
-            return self.model_parameters
+            return {"model_parameters": self.model_parameters}
             
             
     def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
