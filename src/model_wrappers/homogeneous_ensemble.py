@@ -17,7 +17,7 @@ from model_wrappers.heterogeneous_ensemble import HeterogeneousEnsemble
 class HomogeneousEnsemble(HeterogeneousEnsemble):
     
     def __init__(self, model_parameters):
-        self.child_model_class =  model_parameters['child_model']['model_class']
+        self.child_model_class = model_parameters['child_model']['model_class']
         self.child_model_parameters = model_parameters['child_model']['model_class']
         self.model_parameters = model_parameters
         if('constituent_models' in model_parameters.keys()):
@@ -200,11 +200,10 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             onlyBetaSearchSpace['beta'] = copy.deepcopy(search_space['beta'])
             search_space.pop('beta')
             ndays = (datetime.strptime(train_end_date, "%m/%d/%y") - (datetime.strptime(train_start_date, "%m/%d/%y"))).days
-            
+
             train1_end_date = (datetime.strptime(train_start_date, "%m/%d/%y") + timedelta(days=ndays * float(search_parameters['frac_for_child']))).strftime("%-m/%-d/%y")
             self.train_for_ensemble(region_metadata, region_observations, train_start_date,
-              train1_end_date, search_space, search_parameters, train_loss_function)
-            
+              train1_end_date, search_space, search_parameters["child_model"], train_loss_function)
             self.models = copy.deepcopy(self.model_parameters['constituent_models'])
             self.losses = copy.deepcopy(self.model_parameters['constituent_model_losses'])
 
@@ -219,9 +218,9 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                 constituent_model_parameters = constituent_model['model_parameters']
                 self.models[idx] = model_factory_alias.ModelFactory.get_model(
                     constituent_model_class, constituent_model_parameters)
-           
+
             resultsBeta = super().train(region_metadata, region_observations, train_start_date,
-              train_end_date, onlyBetaSearchSpace, search_parameters, train_loss_function)
+              train_end_date, onlyBetaSearchSpace, search_parameters["ensemble_model"], train_loss_function)
             self.model_parameters.update(resultsBeta['model_parameters'])
             return {"model_parameters": self.model_parameters}
             
