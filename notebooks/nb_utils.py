@@ -831,7 +831,7 @@ def train_eval_ensemble(region, region_type,
     train_module_config = TrainingModuleConfig.parse_obj(train_config)
     train_results = TrainingModule.from_config(train_module_config)
 
-    train1_model_params['model_parameters'] = train_results  # DIFFERENT
+    train1_model_params['model_parameters'] = train_results['model_parameters']
 
     test_config = deepcopy(default_test_config)
     test_config['data_source'] = data_source
@@ -880,8 +880,8 @@ def train_eval_ensemble(region, region_type,
     final_train_module_config = TrainingModuleConfig.parse_obj(final_train_config)
     final_results = TrainingModule.from_config(final_train_module_config)
 
-    model_params['model_parameters'] = final_results  # DIFFERENT
-    train2_model_params['model_parameters'] = final_results  # DIFFERENT
+    model_params['model_parameters'] = final_results['model_parameters']
+    train2_model_params['model_parameters'] = final_results['model_parameters']
 
     return params, metrics, train1_model_params, train2_model_params
 
