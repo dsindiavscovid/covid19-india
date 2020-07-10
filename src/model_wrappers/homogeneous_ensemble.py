@@ -201,7 +201,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             search_space.pop('beta')
             ndays = (datetime.strptime(train_end_date, "%m/%d/%y") - (datetime.strptime(train_start_date, "%m/%d/%y"))).days
             
-            train1_end_date = (datetime.strptime(train_start_date, "%m/%d/%y") + timedelta(days=ndays//2)).strftime("%-m/%-d/%y")
+            train1_end_date = (datetime.strptime(train_start_date, "%m/%d/%y") + timedelta(days=ndays * float(search_parameters['frac_for_child']))).strftime("%-m/%-d/%y")
             self.train_for_ensemble(region_metadata, region_observations, train_start_date,
               train1_end_date, search_space, search_parameters, train_loss_function)
             
