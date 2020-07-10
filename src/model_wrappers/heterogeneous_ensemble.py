@@ -48,10 +48,13 @@ class HeterogeneousEnsemble(ModelWrapperBase):
     def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,
               train_end_date: str, search_space: dict, search_parameters: dict, train_loss_function: LossFunction):
         result = {}
+        run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
+        precomputed_pred = self.get_predictions_dict(region_metadata, region_observations, run_day,
+                                                     train_start_date, train_end_date)
         if self.is_black_box():
             objective = partial(self.optimize, region_metadata=region_metadata, region_observations=region_observations,
                                 train_start_date=train_start_date, train_end_date=train_end_date,
-                                loss_function=train_loss_function)
+                                loss_function=train_loss_function, precomputed_pred=precomputed_pred)
             for k, v in search_space.items():
                 search_space[k] = hp.uniform(k, v[0], v[1])
             result = hyperparam_tuning(objective, search_space,
@@ -63,11 +66,12 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         return {"model_parameters": model_params}
 
     def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
-                 loss_function):
+                 loss_function, precomputed_pred=None):
         run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
         predict_df = self.predict_mean(region_metadata, region_observations, run_day, train_start_date,
                                        train_end_date,
-                                       search_space=search_space, is_tuning=True)
+                                       search_space=search_space, is_tuning=True,
+                                       precomputed_pred=precomputed_pred)
         metrics_result = evaluate_for_forecast(region_observations, predict_df, [loss_function])
         return metrics_result[0]["value"]
 
@@ -118,10 +122,14 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         search_space = kwargs.get("search_space", {})
         self.model_parameters.update(search_space)
         beta = self.model_parameters['beta']
+        precomputed_pred = kwargs.get("precomputed_pred", None)
 
         # Get predictions from constituent models
-        predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
-                                                        run_day, start_date, end_date)
+        if precomputed_pred is None:
+            predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
+                                                            run_day, start_date, end_date)
+        else:
+            predictions_df_dict = precomputed_pred
 
         # Calculate weights for constituent models as exp(-beta*loss)
         self.weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
