@@ -28,7 +28,12 @@
         "beta": [0, 2]
 	},
 	"search_parameters": {
-		"max_evals": 10,
+        "child_model": {
+		"max_evals": 10
+        },
+        "ensemble_model":{
+		"max_evals": 10
+        },
         "frac_for_child": 0.5
 	},
 	"training_loss_function": {
