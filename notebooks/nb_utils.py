@@ -364,14 +364,14 @@ def train_eval_forecast(region, region_type,
     return forecast_df, params, metrics, model_params
 
 
-def plot_data(region, region_type, plot_config='plot_config.json', plot_name='default.png'):
+def plot_data(region, region_type, data_source=None, plot_config='plot_config.json', plot_name='default.png'):
     
     with open(plot_config) as fin:
         default_plot_config = json.load(fin)
     
     plot_config = deepcopy(default_plot_config)        
 
-    actual = DataFetcherModule.get_observations_for_region(region_type, region, smooth=False)
+    actual = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source, smooth=False)
     actual.drop(columns=['region_name', 'region_type'], inplace=True)
     actual = actual.set_index('observation').transpose().reset_index()
     actual['index'] = pd.to_datetime(actual['index'])
