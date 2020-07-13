@@ -7,7 +7,7 @@ from model_wrappers.base import ModelWrapperBase
 import numpy as np
 import pandas as pd
 
-from seirsplus.models_gen import SEIRSModel
+from seirsplus.models_SEIHRD_gen import SEIHRDModel
 
 from functools import reduce, partial
 from hyperopt import hp
@@ -16,7 +16,7 @@ from entities.loss_function import LossFunction
 from utils.loss_util import evaluate_for_forecast
 import copy
 
-class SEIR_gen(ModelWrapperBase):
+class SEIHRD_gen(ModelWrapperBase):
 
     def fit(self):
         pass
@@ -135,7 +135,7 @@ class SEIR_gen(ModelWrapperBase):
         d = dict()
         d[ForecastVariable.exposed.name] = estimator.numE
         d[ForecastVariable.active.name] = estimator.numI
-        d[ForecastVariable.hospitalized.name] = estimator.numH
+        d[ForecastVariable.hospitalized.name] = [estimator.numHr[i] + estimator.numHd[i] for i in range(len(estimator.numHr))]
         d[ForecastVariable.recovered.name] = estimator.numR
         d[ForecastVariable.deceased.name] = estimator.numD
         return d
@@ -148,8 +148,9 @@ class SEIR_gen(ModelWrapperBase):
         init_sigma = 1. / self.model_parameters['incubation_period']
         init_beta = r0 * init_sigma
         init_gamma = 1. / self.model_parameters['infectious_period']
-        init_alpha = 1. / self.model_parameters['hospitalization_period']
-        init_delta = 1. / self.model_parameters['deceased_ratio']
+        init_alpha = 1. / self.model_parameters['recovery_period']
+        init_delta =  1. / self.model_parameters['deceased_period']
+        init_kappa =  self.model_parameters['recovered_ratio']
         initN = region_metadata.get("population")
         
 
@@ -177,9 +178,10 @@ class SEIR_gen(ModelWrapperBase):
             initDict[var.name] = datasets[var.name][run_day]
 
         oToM = self.getOutsideToModelMap()
-        estimator = SEIRSModel(beta=init_beta, sigma=init_sigma, gamma=init_gamma, alpha=init_alpha, delta=init_delta,
-                               initN=initN, initI=initDict[oToM['initI']], initE=initDict[oToM['initE']], 
-                               initH=initDict[oToM['initH']], initR=initDict[oToM['initR']], initD=initDict[oToM['initD']])
+        estimator = SEIHRDModel(beta=init_beta, sigma=init_sigma, gamma=init_gamma, alpha=init_alpha, delta=init_delta, 
+                               kappa = init_kappa, initN=initN, initI=initDict[oToM['initI']], initE=initDict[oToM['initE']], 
+                               initHr=(initDict[oToM['initH']]*init_kappa), initHd = (initDict[oToM['initH']]*(1-init_kappa)),
+                               initR=initDict[oToM['initR']], initD=initDict[oToM['initD']])
         return estimator
             
         
@@ -197,7 +199,7 @@ class SEIR_gen(ModelWrapperBase):
             data_frames.append(self.alignTimeSeries(mToO[var.name], estimator.tseries, run_day, n_days, var.name))
             
             
-        data_frames.append(self.alignTimeSeries([sum(x) for x in zip(estimator.numH, estimator.numR, estimator.numD)], estimator.tseries, run_day, n_days, ForecastVariable.confirmed.name))
+        data_frames.append(self.alignTimeSeries([sum(x) for x in zip(estimator.numHr, estimator.numHd, estimator.numR, estimator.numD)], estimator.tseries, run_day, n_days, ForecastVariable.confirmed.name))
         
         result = reduce(lambda left, right: pd.merge(left, right, on=['date'], how='inner'), data_frames)
         result = result.dropna()

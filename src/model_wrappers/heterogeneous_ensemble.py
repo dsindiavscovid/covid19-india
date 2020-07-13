@@ -133,7 +133,6 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         # Calculate weights for constituent models as exp(-beta*loss)
         self.weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
-
         # Get weighted predictions of constituent models
         predictions_df_dict = get_weighted_predictions(predictions_df_dict, self.weights)
 

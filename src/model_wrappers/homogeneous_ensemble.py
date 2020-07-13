@@ -167,7 +167,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             constituent_model_losses = dict()
             for i in range(len(result_list)):
                 result = result_list[i]
-                model_params = self.child_model_parameters
+                model_params = copy.deepcopy(self.child_model_parameters)
                 model_params.update(result[0]) 
                 latent_params = child_model.get_latent_params(region_metadata, region_observations, run_day,
                                                               train_end_date, model_params)
@@ -179,10 +179,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                 constituent_model_losses[str(i)] = result[1]
 
         self.model_parameters.update({"constituent_models": constituent_models, "constituent_model_losses": constituent_model_losses})
-#          returnParams = copy.deepcopy(self.model_parameters)
-#         returnParams['child_model'] = returnParams['child_model'].dict()
-#         returnParams.update({"constituent_models": constituent_models, "constituent_model_losses": constituent_model_losses})
-#         return {"model_parameters": returnParams}
+
         return {"model_parameters": self.model_parameters}
     
     def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,

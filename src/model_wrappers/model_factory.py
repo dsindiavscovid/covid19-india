@@ -3,7 +3,7 @@ from model_wrappers.intervention_enabled_seihrd import InterventionEnabledSEIHRD
 from model_wrappers.intervention_enabled_seir import InterventionEnabledSEIR
 from model_wrappers.seir import SEIR
 from model_wrappers.seihrd import SEIHRD
-from model_wrappers.seir_gen import SEIR_gen
+from model_wrappers.seihrd_gen import SEIHRD_gen
 from model_wrappers.heterogeneous_ensemble import HeterogeneousEnsemble
 from model_wrappers.homogeneous_ensemble import HomogeneousEnsemble
 
@@ -16,8 +16,8 @@ class ModelFactory:
             return SEIR(model_parameters)
         elif model_class.__eq__(ModelClass.SEIHRD):
             return SEIHRD(model_parameters)
-        elif model_class.__eq__(ModelClass.SEIR_gen):
-            return SEIR_gen(model_parameters)
+        elif model_class.__eq__(ModelClass.SEIHRD_gen):
+            return SEIHRD_gen(model_parameters)
         elif model_class.__eq__(ModelClass.heterogeneous_ensemble):
             return HeterogeneousEnsemble(model_parameters)
         elif model_class.__eq__(ModelClass.homogeneous_ensemble):

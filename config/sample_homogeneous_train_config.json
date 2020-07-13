@@ -7,10 +7,9 @@
 	"model_class": "homogeneous_ensemble",
 	"model_parameters": {
         "child_model":{
-            "model_class": "SEIR_gen",
+            "model_class": "SEIHRD_gen",
             "model_parameters": {
                 "incubation_period": 5,
-                "F_icu" : 0.05,
                 "latent_information":{
                     "latent_variables": ["exposed", "active"],
                     "latent_on": "confirmed"
@@ -25,11 +24,12 @@
 	},
 	"search_space": {
 		"r0": [0.5, 3],
-		"exposed_ratio": [0.001, 70],
+		"exposed_ratio": [0.001, 10],
 		"active_ratio": [0.001, 2],
 		"infectious_period": [1, 10],
-        "hospitalization_period" : [10, 20],
-        "deceased_ratio" : [0, 1],
+        "recovery_period" : [1, 15],
+        "deceased_period" : [1, 15],
+        "recovered_ratio" : [0.7, 1],
         "beta": [0, 2]
 	},
 	"search_parameters": {
