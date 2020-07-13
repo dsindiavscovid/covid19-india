@@ -7,12 +7,17 @@
 	"model_class": "homogeneous_ensemble",
 	"model_parameters": {
         "child_model":{
-            "model_class": "SEIHRD",
+            "model_class": "SEIR_gen",
             "model_parameters": {
                 "incubation_period": 5,
-                "F_icu" : 0.05
+                "F_icu" : 0.05,
+                "latent_information":{
+                    "latent_variables": ["exposed", "active"],
+                    "latent_on": "confirmed"
+                }
              }
         },
+        
         "modes":{
             "training_mode": "constituent_models",
             "predict_mode": "mean_predictions"
@@ -20,11 +25,11 @@
 	},
 	"search_space": {
 		"r0": [0.5, 3],
-		"EbyCRatio": [0.001, 70],
-		"IbyCRatio": [0.001, 2],
+		"exposed_ratio": [0.001, 70],
+		"active_ratio": [0.001, 2],
 		"infectious_period": [1, 10],
-        "F_hospitalization" : [0, 0.125],
-        "F_fatalities" : [0.02, 0.12],
+        "hospitalization_period" : [10, 20],
+        "deceased_ratio" : [0, 1],
         "beta": [0, 2]
 	},
 	"search_parameters": {

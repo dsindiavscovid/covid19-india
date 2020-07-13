@@ -8,6 +8,7 @@ from hyperopt import hp
 
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
+from entities.model_class import ModelClass
 import model_wrappers.model_factory as model_factory_alias
 from utils.ensemble_util import uncertainty_dict_to_df
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
@@ -17,8 +18,9 @@ from model_wrappers.heterogeneous_ensemble import HeterogeneousEnsemble
 class HomogeneousEnsemble(HeterogeneousEnsemble):
     
     def __init__(self, model_parameters):
-        self.child_model_class = model_parameters['child_model']['model_class']
-        self.child_model_parameters = model_parameters['child_model']['model_class']
+        self.child_model_class = ModelClass(model_parameters['child_model']['model_class'])
+        self.child_model_parameters = model_parameters['child_model']['model_parameters']
+        
         self.model_parameters = model_parameters
         if('constituent_models' in model_parameters.keys()):
             super().__init__(model_parameters)
@@ -106,7 +108,6 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                 end_date: str, **kwargs):
         mean_params = self.get_mean_params()
         mean_param_model = model_factory_alias.ModelFactory.get_model(self.child_model_class, mean_params)
-        print(run_day, start_date, end_date, "Inside Ensemble")
         print(mean_params)
         prediction_df = mean_param_model.predict(region_metadata, region_observations, run_day, start_date, end_date)
         return prediction_df
@@ -151,10 +152,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         
     def train_for_ensemble(self, region_metadata, region_observations, train_start_date, train_end_date, search_space,
                            search_parameters, train_loss_function):
-
-        child_model_parameters = self.model_parameters['child_model']['model_parameters']   
-        
-        child_model = model_factory_alias.ModelFactory.get_model(self.child_model_class, child_model_parameters)
+        child_model = model_factory_alias.ModelFactory.get_model(self.child_model_class, self.child_model_parameters)
         if child_model.is_black_box():
             objective = partial(child_model.optimize, region_metadata=region_metadata, region_observations=region_observations,
                                 train_start_date=train_start_date,
@@ -169,17 +167,22 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             constituent_model_losses = dict()
             for i in range(len(result_list)):
                 result = result_list[i]
-                model_params = copy.deepcopy(child_model_parameters)
+                model_params = self.child_model_parameters
                 model_params.update(result[0]) 
                 latent_params = child_model.get_latent_params(region_metadata, region_observations, run_day,
                                                               train_end_date, model_params)
                 model_params.update(latent_params["latent_params"])
                 tempDict = dict()
-                tempDict['model_class'] = self.child_model_class
+                tempDict['model_class'] = self.child_model_class.name
                 tempDict['model_parameters'] = model_params
                 constituent_models[str(i)] = tempDict
-                constituent_model_losses[str(i)] = result[1]   
+                constituent_model_losses[str(i)] = result[1]
+
         self.model_parameters.update({"constituent_models": constituent_models, "constituent_model_losses": constituent_model_losses})
+#          returnParams = copy.deepcopy(self.model_parameters)
+#         returnParams['child_model'] = returnParams['child_model'].dict()
+#         returnParams.update({"constituent_models": constituent_models, "constituent_model_losses": constituent_model_losses})
+#         return {"model_parameters": returnParams}
         return {"model_parameters": self.model_parameters}
     
     def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,
