@@ -204,8 +204,10 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             train1_end_date = (datetime.strptime(train_start_date, "%m/%d/%y") + timedelta(days=ndays * float(search_parameters['frac_for_child']))).strftime("%-m/%-d/%y")
             self.train_for_ensemble(region_metadata, region_observations, train_start_date,
               train1_end_date, search_space, search_parameters["child_model"], train_loss_function)
-            self.models = copy.deepcopy(self.model_parameters['constituent_models'])
-            self.losses = copy.deepcopy(self.model_parameters['constituent_model_losses'])
+            self.models = {k: v for k, v in self.model_parameters['constituent_models'].items() if int(k) < self.model_parameters["n"]}
+            self.losses = {k: v for k, v in self.model_parameters['constituent_model_losses'].items() if int(k) < self.model_parameters["n"]}
+            # self.models = copy.deepcopy(self.model_parameters['constituent_models'])
+            # self.losses = copy.deepcopy(self.model_parameters['constituent_model_losses'])
 
             if 'constituent_model_weights' in self.model_parameters:
                 self.weights = copy.deepcopy(self.model_parameters['constituent_model_weights'])
