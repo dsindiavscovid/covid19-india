@@ -16,7 +16,7 @@
                 }
              }
         },
-        
+        "n": 50,
         "modes":{
             "training_mode": "constituent_models",
             "predict_mode": "mean_predictions"
@@ -34,10 +34,10 @@
 	},
 	"search_parameters": {
         "child_model": {
-		"max_evals": 10
+		"max_evals": 1000
         },
         "ensemble_model":{
-		"max_evals": 10
+		"max_evals": 100
         },
         "frac_for_child": 0.5
 	},
