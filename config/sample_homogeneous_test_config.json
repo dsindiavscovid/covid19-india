@@ -129,5 +129,6 @@
             ]
         }
     ],
-    "output_filepath": "del-test.json"
+    "output_filepath": "",
+    "input_filepath": ""
 }

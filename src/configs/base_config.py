@@ -16,6 +16,7 @@ class BaseConfig(BaseModel):
     model_class: ModelClass
     model_parameters: dict
     output_filepath: str = None
+    input_filepath: str = None
 
 
 class TrainingModuleConfig(BaseConfig):

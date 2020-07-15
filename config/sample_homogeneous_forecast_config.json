@@ -57,5 +57,6 @@
        "tolerance": 1,
        "param_key_of_interest": "r0"
        }
-	}
+	},
+    "input_filepath": ""
 }
