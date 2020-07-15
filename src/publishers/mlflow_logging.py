@@ -60,8 +60,9 @@ def get_previous_runs(experiment_name, region, interval=0):
     run_ids = runs_df['run_id']
 
     links = ["/".join([prefix, run_id]) for run_id in run_ids]
-    links_df = pd.DataFrame({'published on': runs_df['start_time'], 'link to run': links})
-    links_df['published on'] = links_df['published on'].apply(lambda x: x.date())
+    links_df = pd.DataFrame(
+        {'Published on': runs_df['start_time'], 'Run name': runs_df['tags.mlflow.runName'], 'Link to run': links})
+    links_df['Published on'] = links_df['Published on'].apply(lambda x: x.date())
     links_df.index += 1
 
     return links_df
