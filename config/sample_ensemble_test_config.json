@@ -1,0 +1,125 @@
+{
+    "data_source": "tracker_district_daily",
+    "region_name": [
+        "bengaluru urban"
+    ],
+    "region_type": "district",
+    "run_day": "5/24/20",
+    "test_start_date": "5/25/20",
+    "test_end_date": "6/1/20",
+    "model_class": "heterogeneous_ensemble",
+    "model_parameters": {
+        "incubation_period": 5,
+        "F_icu": 0.05,
+        "constituent_models": {
+            "0": {
+                "model_class": "SEIHRD",
+                "model_parameters": {
+                    "incubation_period": 5,
+                    "F_icu": 0.05,
+                    "EbyCRatio": 57.24504539983303,
+                    "F_fatalities": 0.02939840410615913,
+                    "F_hospitalization": 0.09255640493613826,
+                    "IbyCRatio": 0.6853391013721378,
+                    "infectious_period": 1.356269916680188,
+                    "r0": 2.058302737418627,
+                    "LatentEbyCRatio": {
+                        "6/10/20": 57.24504539983303,
+                        "6/20/20": 0.3503055147832431
+                    },
+                    "LatentIbyCRatio": {
+                        "6/10/20": 0.6853391013721378,
+                        "6/20/20": 0.09134310512001675
+                    }
+                }
+            },
+            "1": {
+                "model_class": "SEIHRD",
+                "model_parameters": {
+                    "incubation_period": 5,
+                    "F_icu": 0.05,
+                    "EbyCRatio": 57.24504539983303,
+                    "F_fatalities": 0.02939840410615913,
+                    "F_hospitalization": 0.09255640493613826,
+                    "IbyCRatio": 0.6853391013721378,
+                    "infectious_period": 1.356269916680188,
+                    "r0": 2.058302737418627,
+                    "LatentEbyCRatio": {
+                        "6/10/20": 57.24504539983303,
+                        "6/20/20": 0.3503055147832431
+                    },
+                    "LatentIbyCRatio": {
+                        "6/10/20": 0.6853391013721378,
+                        "6/20/20": 0.09134310512001675
+                    }
+                }
+            }
+        },
+        "constituent_model_losses": {
+            "0": 614.1516557715153,
+            "1": 2125.477875711327
+        },
+        "beta": 0.765392383631114,
+        "MAPE": 48.00997710958019
+    },
+    "loss_functions": [
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "confirmed",
+                    "weight": 0.25
+                },
+                {
+                    "variable": "recovered",
+                    "weight": 0.25
+                },
+                {
+                    "variable": "deceased",
+                    "weight": 0.25
+                },
+                {
+                    "variable": "hospitalized",
+                    "weight": 0.25
+                }
+            ]
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "confirmed",
+                    "weight": 1
+                }
+            ]
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "hospitalized",
+                    "weight": 1
+                }
+            ]
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "recovered",
+                    "weight": 1
+                }
+            ]
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "deceased",
+                    "weight": 1
+                }
+            ]
+        }
+    ],
+    "output_filepath": ""
+}

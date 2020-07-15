@@ -1,11 +1,12 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Union
 
 from entities.intervention_variable import InputType
 from entities.forecast_variables import ForecastVariable
 from entities.model_class import ModelClass
 from entities.loss_function import LossFunction
 from entities.data_source import DataSource
+
 
 
 class BaseConfig(BaseModel):

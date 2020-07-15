@@ -21,7 +21,9 @@ def create_connection(pyathena_rc_path=None):
         Connection Cursor
     """
     if pyathena_rc_path is None:
-        pyathena_rc_path = Path(__file__).parent / "../../../../pyathena/pyathena.rc"
+        pyathena_rc_path = Path(__file__).parent / "../../../pyathena/pyathena.rc"
+
+    SCHEMA_NAME = 'wiai-covid-data'
 
     # Open Pyathena RC file and get list of all connection variables in a processable format
     with open(pyathena_rc_path) as f:
@@ -62,7 +64,7 @@ def get_athena_dataframes(pyathena_rc_path=None):
             testing_summary
     """
     if pyathena_rc_path is None:
-        pyathena_rc_path = Path(__file__).parent / "../../../../pyathena/pyathena.rc"
+        pyathena_rc_path = Path(__file__).parent / "../../../pyathena/pyathena.rc"
 
     # Create connection
     cursor = create_connection(pyathena_rc_path)
@@ -92,18 +94,9 @@ def get_data_from_db(district):
     df_result = df_result.dropna(subset=['date'])
     df_result['date'] = pd.to_datetime(df_result['date']).apply(lambda x: x.strftime("%-m/%-d/%y"))
 
-    del df_result['state']
-    del df_result['district']
-    del df_result['ward_name']
-    del df_result['ward_no']
-    del df_result['mild']
-    del df_result['moderate']
-    del df_result['severe']
-    del df_result['critical']
-    del df_result['partition_0']
-
-    df_result.columns = [x if x != 'active' else 'hospitalized' for x in df_result.columns]
-    df_result.columns = [x if x != 'total' else 'confirmed' for x in df_result.columns]
+    df_result.drop(['state', 'district', 'ward_name', 'ward_no', 'mild', 'moderate', 'severe', 'critical', 'partition_0'],
+                   axis=1, inplace=True)
+    df_result.rename({'total': 'confirmed', 'active': 'hospitalized'}, axis='columns', inplace=True)
     df_result = df_result.fillna(0)
 
     df_result = df_result.rename(columns={'date': 'index'})

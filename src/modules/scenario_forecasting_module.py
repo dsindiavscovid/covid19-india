@@ -10,7 +10,7 @@ from utils.config_util import read_config_file
 import pandas as pd
 from datetime import datetime, timedelta
 
-from utils.data_transformer_helper import convert_to_initial_observations, convert_to_nhu_format
+from utils.data_transformer_helper import convert_to_initial_observations, convert_to_jhu_format
 
 
 class ScenarioForecastingModule(object):
@@ -49,7 +49,7 @@ class ScenarioForecastingModule(object):
             start_date = (datetime.strptime(time_interval.end_date, "%m/%d/%y") + timedelta(days=1)).strftime(
                 "%m/%d/%y")
         predictions_df = pd.concat(predictions_list, axis=0)
-        predictions_df = convert_to_nhu_format(predictions_df, region_type, region_name, self._model_parameters['MAPE'])
+        predictions_df = convert_to_jhu_format(predictions_df, region_type, region_name, self._model_parameters['MAPE'])
         return predictions_df
 
     def predict_for_region(self, region_type: str, region_name: str, run_day: str, start_date: str,
