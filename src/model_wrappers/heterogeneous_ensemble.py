@@ -132,14 +132,17 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             predictions_df_dict = precomputed_pred
 
         # Calculate weights for constituent models as exp(-beta*loss)
-        self.weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = deepcopy(self.weights)
         # Get weighted predictions of constituent models
-        predictions_df_dict = get_weighted_predictions(predictions_df_dict, self.weights)
+        predictions_df_dict = get_weighted_predictions(predictions_df_dict, weights)
 
         # Compute mean predictions
         mean_predictions_df = reduce(lambda left, right: left.add(right), predictions_df_dict.values())
-        if sum(self.weights.values()) != 0:
-            mean_predictions_df = mean_predictions_df.div(sum(self.weights.values()))
+        if sum(weights.values()) != 0:
+            mean_predictions_df = mean_predictions_df.div(sum(weights.values()))
         mean_predictions_df.reset_index(inplace=True)
 
         return mean_predictions_df
@@ -187,7 +190,12 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
         except KeyError:
             raise Exception("The planning date is not in the range of predicted dates")
-        df = pd.DataFrame.from_dict(self.weights, orient='index', columns=['weight'])
+        beta = self.model_parameters['beta']
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = deepcopy(self.weights)
+        df = pd.DataFrame.from_dict(weights, orient='index', columns=['weight'])
         df = df.join(predictions_doi.set_index(df.index))
 
         # Find PDF, CDF
