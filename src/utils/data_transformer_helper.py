@@ -57,7 +57,30 @@ def convert_to_jhu_format(predictions_df, region_type, region_name):
     return preddf
 
 
-def convert_dataframe( region_df):
+def convert_to_old_required_format(self, run_day, predictions_df, region_type, region_name):
+
+    preddf = predictions_df.set_index('date')
+    columns = [ForecastVariable.active.name, ForecastVariable.hospitalized.name,
+               ForecastVariable.recovered.name, ForecastVariable.deceased.name, ForecastVariable.confirmed.name]
+    for col in columns:
+        preddf = preddf.rename(columns={col: col + '_mean'})
+    error = min(1, float(self._model_parameters['MAPE']) / 100)
+    for col in columns:
+        col_mean = col + '_mean'
+        preddf[col + '_min'] = preddf[col_mean] * (1 - error)
+        preddf[col + '_max'] = preddf[col_mean] * (1 + error)
+
+    preddf.insert(0, 'run_day', run_day)
+    preddf.insert(1, 'Region Type', region_type)
+    preddf.insert(2, 'Region', " ".join(region_name))
+    preddf.insert(3, 'Model', self._model.__class__.__name__)
+    preddf.insert(4, 'Error', "MAPE")
+    preddf.insert(5, "Error Value", error * 100)
+
+    return preddf
+
+
+def convert_dataframe(region_df):
     region_df = region_df.reset_index()
     region_df.drop(["region_name", "region_type", "index"], axis=1, inplace=True)
     headers = region_df.transpose().reset_index().iloc[0]

@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta
 import json
+from datetime import datetime, timedelta
+
 from configs.base_config import TrainingModuleConfig
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.model_evaluator import ModelEvaluator
 from utils.config_util import read_config_file
-from utils.loss_util import evaluate_for_forecast
 
 
 class TrainingModule(object):
@@ -21,11 +21,12 @@ class TrainingModule(object):
                                  search_space, search_parameters, train_loss_function)
 
     def train_for_region(self, data_source, region_type, region_name, train_start_date, train_end_date,
-                         search_space, search_parameters, train_loss_function):
-        observations = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source)
-        region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source)
+                         search_space, search_parameters, train_loss_function, input_filepath):
+        observations = DataFetcherModule.get_observations_for_region(region_type, region_name,
+                                                                     data_source=data_source, filepath=input_filepath)
+        region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source=data_source)
         return self.train(region_metadata, observations, train_start_date, train_end_date,
-                              search_space, search_parameters, train_loss_function)
+                          search_space, search_parameters, train_loss_function)
 
     @staticmethod
     def from_config(config: TrainingModuleConfig):
@@ -34,17 +35,22 @@ class TrainingModule(object):
                                                    config.train_start_date,
                                                    config.train_end_date,
                                                    config.search_space,
-                                                   config.search_parameters, config.training_loss_function)
-        
-        if(not ("modes" in config.model_parameters.keys() and config.model_parameters['modes']['training_mode'] == 'constituent_models')):
+                                                   config.search_parameters, config.training_loss_function,
+                                                   config.input_filepath)
+
+        if not ("modes" in config.model_parameters.keys() and config.model_parameters['modes'][
+                'training_mode'] == 'constituent_models'):
             config.model_parameters.update(
                 results["model_parameters"])  # updating model parameters with best params found above
             model_evaluator = ModelEvaluator(config.model_class, config.model_parameters)
             run_day = (datetime.strptime(config.train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
-            results["train_metric_results"] = model_evaluator.evaluate_for_region(config.data_source, config.region_type,
+            results["train_metric_results"] = model_evaluator.evaluate_for_region(config.data_source,
+                                                                                  config.region_type,
                                                                                   config.region_name, run_day,
                                                                                   config.train_start_date,
-                                                                                  config.train_end_date, config.loss_functions)
+                                                                                  config.train_end_date,
+                                                                                  config.loss_functions,
+                                                                                  config.input_filepath)
         if config.output_filepath is not None:
             with open(config.output_filepath, 'w') as outfile:
                 json.dump(results, outfile, indent=4)
