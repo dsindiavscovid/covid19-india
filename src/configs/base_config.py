@@ -10,7 +10,7 @@ from entities.data_source import DataSource
 
 
 class BaseConfig(BaseModel):
-    data_source: str = DataSource.tracker_district_daily
+    data_source: DataSource = DataSource.tracker_district_daily
     region_name: List[str]
     region_type: str
     model_class: ModelClass
