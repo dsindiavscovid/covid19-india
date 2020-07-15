@@ -499,7 +499,7 @@ def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_d
     plt.savefig(plot_name)
 
     
-def plot_m2(train2_model_params, train_start_date, train_end_date, test_run_day, test_start_date, test_end_date,
+def plot_m2(train2_model_params, train2_run_day, train2_start_date, train2_end_date, 
             forecast_config, uncertainty=False, rolling_average=False, plot_config='plot_config.json',
             plot_name='default.png'):
     """
@@ -517,10 +517,10 @@ def plot_m2(train2_model_params, train_start_date, train_end_date, test_run_day,
     plot_config['uncertainty'] = uncertainty
     plot_config['rolling_average'] = rolling_average
     
-    actual_start_date = (datetime.strptime(test_start_date, "%m/%d/%y") - timedelta(days=14)).strftime("%-m/%-d/%y")    
+    actual_start_date = (datetime.strptime(train2_start_date, "%m/%d/%y") - timedelta(days=14)).strftime("%-m/%-d/%y")    
     
     # Get predictions
-    pd_df_test = forecast(train2_model_params, test_run_day, test_start_date, test_end_date, forecast_config)
+    pd_df_test = forecast(train2_model_params, train2_run_day, train2_start_date, train2_end_date, forecast_config)
     
     pd_df_test['index'] = pd.to_datetime(pd_df_test['index']) 
     pd_df = pd_df_test.sort_values(by=['index'])
@@ -532,7 +532,7 @@ def plot_m2(train2_model_params, train_start_date, train_end_date, test_run_day,
     actual = actual.transpose()
     actual = actual.reset_index()
     start = actual.index[actual['index'] == actual_start_date].tolist()[0]
-    end = actual.index[actual['index'] == test_end_date].tolist()[0]
+    end = actual.index[actual['index'] == train2_end_date].tolist()[0]
     actual = actual[start : end+1]
     actual['index'] = pd.to_datetime(actual['index'])
     
@@ -570,10 +570,10 @@ def plot_m2(train2_model_params, train_start_date, train_end_date, test_run_day,
             ax.plot(pd_df['index'], pd_df[variable+'_ra'], plot_markers['rolling_average'], 
                 color = plot_colors[variable], label = plot_labels[variable]+': Predicted (RA)')
     
-    test_start = pd.to_datetime(test_start_date)
+    train2_start = pd.to_datetime(train2_start_date)
     
     line_height = plt.ylim()[1]
-    ax.plot([test_start, test_start], [0,line_height], '--', color='black', label='Test starts')
+    ax.plot([train2_start, train2_start], [0,line_height], '--', color='black', label='Train starts')
     
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=5))
     ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
@@ -921,7 +921,7 @@ def train_eval_plot_ensemble(region, region_type,
     plot_m1(train1_params, train1_run_day, train1_start_date, train1_end_date, test_run_day, test_start_date,
             test_end_date, default_forecast_config, plot_name=name_prefix + '_m1.png')
 
-    plot_m2(train2_params, train1_start_date, train1_end_date, test_run_day, test_start_date, test_end_date,
+    plot_m2(train2_params, train2_run_day, train2_start_date, train2_end_date,
             default_forecast_config, plot_name=name_prefix + '_m2.png')
 
     forecast_start_date = (datetime.strptime(train2_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
