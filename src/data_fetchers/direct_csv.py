@@ -1,6 +1,5 @@
 import pandas as pd
 
-from pathlib import Path
 from functools import lru_cache
 
 from data_fetchers.data_fetcher_base import DataFetcherBase
@@ -27,7 +26,6 @@ def load_observations_data(region_type, region_name, filepath):
     df = df.transpose().reset_index().rename(columns={'index': 'observation'}).rename_axis(None)
     df.insert(0, column='region_name', value=region_name)
     df.insert(1, column='region_type', value=region_type)
-    print(df)
     return df
 
 

@@ -1,12 +1,10 @@
 import copy
-import pandas as pd
-
 from pathlib import Path
 
+import pandas as pd
+from data_fetchers.data_fetcher_base import DataFetcherBase
 from pyathena import connect
 from pyathena.pandas_cursor import PandasCursor
-
-from data_fetchers.data_fetcher_base import DataFetcherBase
 
 SCHEMA_NAME = 'wiai-covid-data'
 
@@ -22,8 +20,6 @@ def create_connection(pyathena_rc_path=None):
     """
     if pyathena_rc_path is None:
         pyathena_rc_path = Path(__file__).parent / "../../../pyathena/pyathena.rc"
-
-    SCHEMA_NAME = 'wiai-covid-data'
 
     # Open Pyathena RC file and get list of all connection variables in a processable format
     with open(pyathena_rc_path) as f:
@@ -94,8 +90,9 @@ def get_data_from_db(district):
     df_result = df_result.dropna(subset=['date'])
     df_result['date'] = pd.to_datetime(df_result['date']).apply(lambda x: x.strftime("%-m/%-d/%y"))
 
-    df_result.drop(['state', 'district', 'ward_name', 'ward_no', 'mild', 'moderate', 'severe', 'critical', 'partition_0'],
-                   axis=1, inplace=True)
+    df_result.drop(
+        ['state', 'district', 'ward_name', 'ward_no', 'mild', 'moderate', 'severe', 'critical', 'partition_0'],
+        axis=1, inplace=True)
     df_result.rename({'total': 'confirmed', 'active': 'hospitalized'}, axis='columns', inplace=True)
     df_result = df_result.fillna(0)
 
