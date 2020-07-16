@@ -148,7 +148,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         return mean_predictions_df
     
     # Helper function to get the model indexes for 
-    def _getIndexForPercentileHelper(self, column_of_interest, date_of_interest, tolerance, percentiles, region_metadata, region_observations, run_day, start_date, end_date):
+    def _get_index_for_percentile_helper(self, column_of_interest, date_of_interest, tolerance, percentiles, region_metadata, region_observations, run_day, start_date, end_date):
         
 
         # Get predictions, mean predictions and weighted predictions
@@ -210,7 +210,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             confidence_intervals.extend([50 - c/2, 50 + c/2])
         tolerance = uncertainty_params['tolerance']
         print(date_of_interest)
-        percentiles_dict, predictions_df_dict = self._getIndexForPercentileHelper(column_of_interest, date_of_interest, tolerance, percentiles+confidence_intervals, region_metadata, region_observations, run_day, start_date, end_date)
+        percentiles_dict, predictions_df_dict = self._get_index_for_percentile_helper(column_of_interest, date_of_interest, tolerance, percentiles+confidence_intervals, region_metadata, region_observations, run_day, start_date, end_date)
         
         # Create dictionary of dataframes for percentiles
         percentiles_predictions = dict()
@@ -230,3 +230,16 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             percentiles_predictions.drop(columns='predictionDate', inplace=True)
 
         return percentiles_predictions
+    
+    def get_params_for_percentiles(self, column_of_interest, date_of_interest, tolerance, percentiles, region_metadata, region_observations, run_day, start_date, end_date):
+        
+        percentiles_dict, _ = self._get_index_for_percentile_helper(column_of_interest, date_of_interest, tolerance,
+                                                                    percentiles, region_metadata, region_observations, 
+                                                                    run_day, start_date, end_date)
+        return_dict = dict()
+        for decile in percentiles_dict.keys():
+            return_dict[decile] = self.models[percentiles_dict[decile]].model_parameters
+    
+        return return_dict
+        
+    

@@ -64,12 +64,6 @@ def uncertainty_dict_to_df(percentiles_predictions):
         cols = list(df_prediction.columns)
         for col in cols:
             df_output.loc[:, col+'_{}'.format(decile)] = df_prediction[col]
-#         df_output.loc[:, f'active_{decile}'] = df_prediction['active']
-#         df_output.loc[:, f'hospitalized_{decile}'] = df_prediction['hospitalized']
-#         df_output.loc[:, f'icu_{decile}'] = df_prediction['icu']
-#         df_output.loc[:, f'recovered_{decile}'] = df_prediction['recovered']
-#         df_output.loc[:, f'deceased_{decile}'] = df_prediction['deceased']
-#         df_output.loc[:, f'confirmed_{decile}'] = df_prediction['confirmed']
 
     df_output.reset_index(inplace=True)
 
