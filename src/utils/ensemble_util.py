@@ -47,15 +47,12 @@ def uncertainty_dict_to_df(percentiles_predictions):
     """
 
     columns = ['predictionDate']
-
     for decile in percentiles_predictions.keys():
-        columns += [f'active_{decile}',
-                    f'hospitalized_{decile}',
-                    f'icu_{decile}',
-                    f'recovered_{decile}',
-                    f'deceased_{decile}',
-                    f'confirmed_{decile}',
-                    ]
+        df_prediction = percentiles_predictions[decile]['df_prediction']
+        cols = list(df_prediction.columns)
+        for col in cols:
+            columns.append(col+'_{}'.format(decile))
+
     df_output = pd.DataFrame(columns=columns)
 
     date_series = percentiles_predictions[list(percentiles_predictions.keys())[0]]['df_prediction'].index
@@ -64,12 +61,15 @@ def uncertainty_dict_to_df(percentiles_predictions):
 
     for decile in percentiles_predictions.keys():
         df_prediction = percentiles_predictions[decile]['df_prediction']
-        df_output.loc[:, f'active_{decile}'] = df_prediction['active']
-        df_output.loc[:, f'hospitalized_{decile}'] = df_prediction['hospitalized']
-        df_output.loc[:, f'icu_{decile}'] = df_prediction['icu']
-        df_output.loc[:, f'recovered_{decile}'] = df_prediction['recovered']
-        df_output.loc[:, f'deceased_{decile}'] = df_prediction['deceased']
-        df_output.loc[:, f'confirmed_{decile}'] = df_prediction['confirmed']
+        cols = list(df_prediction.columns)
+        for col in cols:
+            df_output.loc[:, col+'_{}'.format(decile)] = df_prediction[col]
+#         df_output.loc[:, f'active_{decile}'] = df_prediction['active']
+#         df_output.loc[:, f'hospitalized_{decile}'] = df_prediction['hospitalized']
+#         df_output.loc[:, f'icu_{decile}'] = df_prediction['icu']
+#         df_output.loc[:, f'recovered_{decile}'] = df_prediction['recovered']
+#         df_output.loc[:, f'deceased_{decile}'] = df_prediction['deceased']
+#         df_output.loc[:, f'confirmed_{decile}'] = df_prediction['confirmed']
 
     df_output.reset_index(inplace=True)
 
