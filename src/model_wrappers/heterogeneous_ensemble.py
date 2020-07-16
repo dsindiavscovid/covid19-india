@@ -129,13 +129,14 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
                                                             run_day, start_date, end_date)
         else:
-            predictions_df_dict = precomputed_pred
+            predictions_df_dict = deepcopy(precomputed_pred)
 
         # Calculate weights for constituent models as exp(-beta*loss)
         if self.weights is None or is_tuning:
             weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
         else:
             weights = deepcopy(self.weights)
+       
         # Get weighted predictions of constituent models
         predictions_df_dict = get_weighted_predictions(predictions_df_dict, weights)
 
@@ -144,7 +145,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         if sum(weights.values()) != 0:
             mean_predictions_df = mean_predictions_df.div(sum(weights.values()))
         mean_predictions_df.reset_index(inplace=True)
-
+    
         return mean_predictions_df
     
     # Helper function to get the model indexes for 
