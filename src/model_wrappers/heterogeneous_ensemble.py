@@ -123,7 +123,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         self.model_parameters.update(search_space)
         beta = self.model_parameters['beta']
         precomputed_pred = kwargs.get("precomputed_pred", None)
-
+        is_tuning = kwargs.get("is_tuning", False)
         # Get predictions from constituent models
         if precomputed_pred is None:
             predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
@@ -132,7 +132,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             predictions_df_dict = precomputed_pred
 
         # Calculate weights for constituent models as exp(-beta*loss)
-        if self.weights is None:
+        if self.weights is None or is_tuning:
             weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
         else:
             weights = deepcopy(self.weights)
