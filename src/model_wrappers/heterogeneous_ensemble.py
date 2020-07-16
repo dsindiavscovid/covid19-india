@@ -123,19 +123,20 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         self.model_parameters.update(search_space)
         beta = self.model_parameters['beta']
         precomputed_pred = kwargs.get("precomputed_pred", None)
-
+        is_tuning = kwargs.get("is_tuning", False)
         # Get predictions from constituent models
         if precomputed_pred is None:
             predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
                                                             run_day, start_date, end_date)
         else:
-            predictions_df_dict = precomputed_pred
+            predictions_df_dict = deepcopy(precomputed_pred)
 
         # Calculate weights for constituent models as exp(-beta*loss)
-        if self.weights is None:
+        if self.weights is None or is_tuning:
             weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
         else:
             weights = deepcopy(self.weights)
+       
         # Get weighted predictions of constituent models
         predictions_df_dict = get_weighted_predictions(predictions_df_dict, weights)
 
@@ -144,8 +145,42 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         if sum(weights.values()) != 0:
             mean_predictions_df = mean_predictions_df.div(sum(weights.values()))
         mean_predictions_df.reset_index(inplace=True)
-
+    
         return mean_predictions_df
+    
+    # Helper function to get the model indexes for 
+    def _get_index_for_percentile_helper(self, column_of_interest, date_of_interest, tolerance, percentiles, region_metadata, region_observations, run_day, start_date, end_date):
+        
+
+        # Get predictions, mean predictions and weighted predictions
+        predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
+                                                        run_day, start_date, end_date)
+
+        # Get predictions for a specific column on date of interest
+        trials_df = create_trials_dataframe(predictions_df_dict, column_of_interest)
+        try:
+            predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
+        except KeyError:
+            raise Exception("The planning date is not in the range of predicted dates")
+        beta = self.model_parameters['beta']
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = deepcopy(self.weights)
+        df = pd.DataFrame.from_dict(weights, orient='index', columns=['weight'])
+        df = df.join(predictions_doi.set_index(df.index))
+
+        # Find PDF, CDF
+        df['pdf'] = weights_to_pdf(df['weight'])
+        df = df.sort_values(by=date_of_interest).reset_index()
+        df['cdf'] = pdf_to_cdf(df['pdf'])
+
+        # Get indices for percentiles and confidence intervals
+        percentiles_dict = dict()
+        for p in percentiles:
+            percentiles_dict[p] = get_best_index(df, p, tolerance)
+        return percentiles_dict, predictions_df_dict
+        
 
     def predict_with_uncertainty(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
                                  start_date: str, end_date: str, **kwargs):
@@ -175,41 +210,11 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         for c in ci:
             confidence_intervals.extend([50 - c/2, 50 + c/2])
         tolerance = uncertainty_params['tolerance']
-
-        percentiles_dict = dict()
-        percentiles_predictions = dict()
-
-        # Get predictions, mean predictions and weighted predictions
-        predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
-                                                        run_day, start_date, end_date)
-        mean_predictions_df = self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date)
-
-        # Get predictions for a specific column on date of interest
-        trials_df = create_trials_dataframe(predictions_df_dict, column_of_interest)
-        try:
-            predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
-        except KeyError:
-            raise Exception("The planning date is not in the range of predicted dates")
-        beta = self.model_parameters['beta']
-        if self.weights is None:
-            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
-        else:
-            weights = deepcopy(self.weights)
-        df = pd.DataFrame.from_dict(weights, orient='index', columns=['weight'])
-        df = df.join(predictions_doi.set_index(df.index))
-
-        # Find PDF, CDF
-        df['pdf'] = weights_to_pdf(df['weight'])
-        df = df.sort_values(by=date_of_interest).reset_index()
-        df['cdf'] = pdf_to_cdf(df['pdf'])
-
-        # Get indices for percentiles and confidence intervals
-        for p in percentiles + confidence_intervals:
-            percentiles_dict[p] = get_best_index(df, p, tolerance)
-        # for c in confidence_intervals:
-        #     percentiles_dict[c] = get_best_index(df, confidence_intervals[c], tolerance)
-
+        print(date_of_interest)
+        percentiles_dict, predictions_df_dict = self._get_index_for_percentile_helper(column_of_interest, date_of_interest, tolerance, percentiles+confidence_intervals, region_metadata, region_observations, run_day, start_date, end_date)
+        
         # Create dictionary of dataframes for percentiles
+        percentiles_predictions = dict()
         for key in percentiles_dict.keys():
             percentiles_predictions[key] = {}
             df_predictions = predictions_df_dict[percentiles_dict[key]]
@@ -220,8 +225,22 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         # Include mean predictions in dataframe if include_mean is True
         if include_mean:
+            mean_predictions_df = self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date)
             # TODO: RESOLVE DATE TYPES AND USE A JOIN INSTEAD OF CONCAT
             percentiles_predictions = pd.concat([mean_predictions_df, percentiles_predictions], axis=1)
             percentiles_predictions.drop(columns='predictionDate', inplace=True)
 
         return percentiles_predictions
+    
+    def get_params_for_percentiles(self, column_of_interest, date_of_interest, tolerance, percentiles, region_metadata, region_observations, run_day, start_date, end_date):
+        
+        percentiles_dict, _ = self._get_index_for_percentile_helper(column_of_interest, date_of_interest, tolerance,
+                                                                    percentiles, region_metadata, region_observations, 
+                                                                    run_day, start_date, end_date)
+        return_dict = dict()
+        for decile in percentiles_dict.keys():
+            return_dict[decile] = self.models[percentiles_dict[decile]].model_parameters
+    
+        return return_dict
+        
+    
