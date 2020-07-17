@@ -43,6 +43,7 @@ def get_previous_runs(experiment_name, region, interval=0):
     Returns:
         pd.DataFrame: links to relevant runs
     """
+    # TODO: Check for status failed
 
     start_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(interval)
     start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -55,6 +56,9 @@ def get_previous_runs(experiment_name, region, interval=0):
 
     query = "params.region = '{}'".format(region)
     runs_df = mlflow.search_runs(experiment_ids=experiment_id, filter_string=query)
+
+    if runs_df.empty:
+        return runs_df
 
     runs_df = runs_df[runs_df['start_time'] >= start_date]
     run_ids = runs_df['run_id']
