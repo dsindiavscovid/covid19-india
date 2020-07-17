@@ -68,6 +68,7 @@ def get_athena_dataframes(pyathena_rc_path=None):
     # Run SQL SELECT queries to get all the tables in the database as pandas data frames
     data_frames = {}
     tables_list = cursor.execute('Show tables').as_pandas().to_numpy().reshape(-1, )
+    tables_list = ['covid_case_summary', 'new_covid_case_summary', 'testing_summary']
     for table in tables_list:
         data_frames[table] = cursor.execute(
             'SELECT * FROM {}'.format(table)).as_pandas()
@@ -88,7 +89,8 @@ def get_data_from_db(district):
     df_result = copy.copy(data_frames['covid_case_summary'])
     df_result = df_result[df_result['district'] == district.lower()]
     df_result = df_result.dropna(subset=['date'])
-    df_result['date'] = pd.to_datetime(df_result['date']).apply(lambda x: x.strftime("%-m/%-d/%y"))
+    df_result['date'] = pd.to_datetime(df_result['date'])
+    df_result['date'] = df_result['date'].apply(lambda x: x.strftime("%-m/%-d/%y"))
 
     df_result.drop(
         ['state', 'district', 'ward_name', 'ward_no', 'mild', 'moderate', 'severe', 'critical', 'partition_0'],
