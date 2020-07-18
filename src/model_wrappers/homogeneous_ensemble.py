@@ -244,5 +244,8 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         elif(self.model_parameters['modes']['predict_mode'] == 'mean_params'):
             return self.predict_from_mean_param(region_metadata, region_observations, run_day, start_date, end_date)
         
+        elif(self.model_parameters['modes']['predict_mode'] == 'best_fit'):
+            return super().predict_best_fit(region_metadata, region_observations, run_day, start_date, end_date)
+        
         else:
              raise Exception("Invalid Predict Mode")

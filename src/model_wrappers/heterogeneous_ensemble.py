@@ -79,8 +79,12 @@ class HeterogeneousEnsemble(ModelWrapperBase):
                 end_date: str, **kwargs):
         if self.model_parameters['modes']['predict_mode'] == 'with_uncertainty':
             return self.predict_with_uncertainty(region_metadata, region_observations, run_day, start_date, end_date)
-        else:
+        elif self.model_parameters['modes']['predict_mode'] == 'best_fit':
+            return self.predict_best_fit(region_metadata, region_observations, run_day, start_date, end_date)
+        elif self.model_parameters['modes']['predict_mode'] == 'mean_predictions':
             return self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date, **kwargs)
+        else:
+            raise Exception("Invalid Predict Mode")
 
     def get_predictions_dict(self, region_metadata, region_observations, run_day, start_date, end_date):
         """Gets predictions for all constituent models
@@ -102,7 +106,16 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             predictions_df = model.predict(region_metadata, region_observations, run_day, start_date, end_date)
             predictions_df_dict[idx] = predictions_df.set_index("date")
         return predictions_df_dict
-
+    
+    def predict_best_fit(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
+                     end_date: str):
+        
+        bestLossIdx = min(self.losses, key=self.losses.get)
+        bestFitModel = self.models[bestLossIdx]
+        return bestFitModel.predict(region_metadata, region_observations, run_day, start_date, end_date)
+            
+            
+    
     def predict_mean(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                      end_date: str, **kwargs):
         """Gets weighted mean predictions using constituent models
@@ -210,7 +223,6 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         for c in ci:
             confidence_intervals.extend([50 - c/2, 50 + c/2])
         tolerance = uncertainty_params['tolerance']
-        print(date_of_interest)
         percentiles_dict, predictions_df_dict = self._get_index_for_percentile_helper(column_of_interest, date_of_interest, tolerance, percentiles+confidence_intervals, region_metadata, region_observations, run_day, start_date, end_date)
         
         # Create dictionary of dataframes for percentiles
