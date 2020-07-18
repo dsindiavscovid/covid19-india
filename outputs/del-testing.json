@@ -1,0 +1,24 @@
+[
+    {
+        "metric_name": "mape",
+        "variable_weights": [
+            {
+                "variable": "confirmed",
+                "weight": 0.25
+            },
+            {
+                "variable": "recovered",
+                "weight": 0.25
+            },
+            {
+                "variable": "deceased",
+                "weight": 0.25
+            },
+            {
+                "variable": "hospitalized",
+                "weight": 0.25
+            }
+        ],
+        "value": 1.9619545968180128
+    }
+]

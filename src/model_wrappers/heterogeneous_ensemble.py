@@ -73,6 +73,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
                                        search_space=search_space, is_tuning=True,
                                        precomputed_pred=precomputed_pred)
         metrics_result = evaluate_for_forecast(region_observations, predict_df, [loss_function])
+        print("{} {}".format(search_space['beta'], metrics_result[0]["value"]))
         return metrics_result[0]["value"]
 
     def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,

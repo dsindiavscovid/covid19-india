@@ -253,7 +253,7 @@ def forecast(model_params, run_day, forecast_start_date, forecast_end_date,
     # TODO: Fix - if data_source is not specified in config the next line throws an error
     eval_config = ForecastingModuleConfig.parse_obj(default_forecast_config)
     eval_config.data_source = model_params['data_source']
-    eval_config.region_name = model_params['region']
+    eval_config.region_name = model_params['region_name']
     eval_config.region_type = model_params['region_type']
     eval_config.model_parameters = model_params['model_parameters']
     eval_config.input_filepath = model_params['input_filepath']
@@ -628,7 +628,7 @@ def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_d
 
     # Get observed data
     actual = DataFetcherModule.get_observations_for_region(
-        train1_model_params['region_type'], train1_model_params['region'],
+        train1_model_params['region_type'], train1_model_params['region_name'],
         data_source=train1_model_params['data_source'], filepath=train1_model_params['input_filepath'])
     actual = actual.set_index('observation')
     actual = actual.transpose()
@@ -685,7 +685,7 @@ def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_d
     ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
 
-    plt.title(train1_model_params['region'])
+    plt.title(train1_model_params['region_name'])
     plt.ylabel('No of People')
     plt.xlabel('Time')
     plt.xticks(rotation=45)

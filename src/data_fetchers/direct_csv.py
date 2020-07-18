@@ -20,9 +20,10 @@ def load_observations_data(region_type, region_name, filepath):
         pd.Dataframe: daily cumulative case counts for region
     """
     df = pd.read_csv(
-        filepath, usecols=['date', 'confirmed', 'active', 'recovered', 'deceased'], header=0)
-    df = df.rename(columns={'active': 'hospitalized', 'date': 'index'})
+        filepath, usecols=['date', 'confirmed', 'hospitalized', 'recovered', 'deceased'], header=0)
+    df = df.rename(columns={'date':'index'})
     df = df.set_index('index')
+#     df = df.rename(columns={'total_infected': 'confirmed', 'active': 'hospitalized'})
     df.index = pd.to_datetime(df.index).strftime('%-m/%-d/%y')
     df = df.transpose().reset_index().rename(columns={'index': 'observation'}).rename_axis(None)
     df.insert(0, column='region_name', value=region_name)
