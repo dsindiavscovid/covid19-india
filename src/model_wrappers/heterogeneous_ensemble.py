@@ -9,7 +9,7 @@ from hyperopt import hp
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
 from model_wrappers.base import ModelWrapperBase
-import model_wrappers.model_factory as model_factory_alias
+from model_wrappers import model_factory as model_factory_alias
 from utils.ensemble_util import get_weighted_predictions, create_trials_dataframe, uncertainty_dict_to_df
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
 from utils.hyperparam_util import hyperparam_tuning
