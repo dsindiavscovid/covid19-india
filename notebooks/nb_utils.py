@@ -16,6 +16,8 @@ from configs.base_config import ForecastingModuleConfig
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
 
+from utils.plotting import m1_plots, m2_plots, m2_forecast_plots
+
 
 def parse_params(parameters, interval='Train1'):
     """
@@ -46,7 +48,7 @@ def parse_params(parameters, interval='Train1'):
             'Train1_LatentIbyCRatio_4/17/20': 0.6742970940209254
         }
     """
-    param_dict = dict() # The flattened dictionary to return
+    param_dict = dict()  # The flattened dictionary to return
     for param in parameters:
         if isinstance(parameters[param], dict):
             for key in parameters[param]:
@@ -237,8 +239,8 @@ def train_eval(region, region_type,
     return params, metrics, train1_model_params, train2_model_params
 
 
-def forecast(model_params, run_day, forecast_start_date, forecast_end_date,
-             default_forecast_config):
+def forecast(model_params, run_day, forecast_start_date, forecast_end_date, default_forecast_config,
+             with_uncertainty=False):
     """
         Generate forecasts for a chosen interval using model parameters
 
@@ -258,14 +260,18 @@ def forecast(model_params, run_day, forecast_start_date, forecast_end_date,
     eval_config.model_parameters = model_params['model_parameters']
     eval_config.input_filepath = model_params['input_filepath']
 
+    if with_uncertainty:
+        eval_config.model_parameters['modes']['predict_mode'] = 'predictions_with_uncertainty'
+        eval_config.model_parameters['uncertainty_parameters'] = \
+            default_forecast_config['model_parameters']['uncertainty_parameters']
+
     eval_config.run_day = run_day
     eval_config.forecast_start_date = forecast_start_date
     eval_config.forecast_end_date = forecast_end_date
     
     forecast_df = ForecastingModule.from_config(eval_config)
     forecast_df = forecast_df.drop(columns=['Region Type', 'Region', 'Country', 'Lat', 'Long'])
-    forecast_df = forecast_df.set_index('prediction_type')
-    forecast_df = forecast_df.transpose().reset_index()
+    forecast_df = forecast_df.reset_index()
     return forecast_df
 
 
@@ -585,15 +591,136 @@ def train_eval_plot_ensemble(region, region_type,
                                                                         mlflow_log=mlflow_log,
                                                                         name_prefix=name_prefix)
 
-    plot_m1(train1_params, train1_run_day, train1_start_date, train1_end_date, test_run_day, test_start_date,
-            test_end_date, default_forecast_config, plot_name=name_prefix + '_m1.png')
-
-    plot_m2(train2_params, train2_run_day, train2_start_date, train2_end_date,
-            default_forecast_config, plot_name=name_prefix + '_m2.png')
-
+    # Set forecast dates
     forecast_start_date = (datetime.strptime(train2_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
-    plot_m3(train2_params, train1_start_date, forecast_start_date, forecast_length, default_forecast_config,
-            plot_name=name_prefix + '_m3.png')
+    forecast_run_day = (datetime.strptime(forecast_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
+    forecast_end_date = (
+            datetime.strptime(forecast_start_date, "%m/%d/%y") + timedelta(days=forecast_length)).strftime("%-m/%-d/%y")
+
+    create_plots(region, region_type, train1_params, train2_params, train1_run_day, train1_start_date, train1_end_date,
+                 test_run_day, test_start_date, test_end_date, train2_run_day, train2_start_date, train2_end_date,
+                 forecast_run_day, forecast_start_date, forecast_end_date, default_forecast_config,
+                 data_source=data_source, input_filepath=input_filepath)
+   
+    if mlflow_log:
+        with mlflow.start_run(run_name=mlflow_run_name):
+            mlflow.log_params(params)
+            mlflow.log_metrics(metrics)
+            mlflow.log_artifact(name_prefix+'_m1.png')
+            mlflow.log_artifact(name_prefix+'_m2.png')
+            mlflow.log_artifact(name_prefix+'_m3.png')
+            mlflow.log_artifact('train_config.json')
+            mlflow.log_artifact('train1_output.json')
+            mlflow.log_artifact('test_output.json')
+            mlflow.log_artifact('train2_output.json')
+
+
+def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
+    init_observations = get_observations_subset(df_actual, run_day, run_day)
+    init_observations_df = pd.DataFrame(columns=df_predictions.columns)
+    for col in init_observations_df.columns:
+        original_col = col.split('_')[0]
+        if original_col in init_observations:
+            init_observations_df.loc[:, col] = init_observations.loc[:, original_col]
+    init_observations_df.loc[:, 'date'] = init_observations.loc[:, 'index'].apply(lambda d: d.strftime('%-m/%-d/%-y'))
+    init_observations_df.fillna(0, inplace=True)
+    df_predictions = pd.concat([init_observations_df, df_predictions], axis=0, ignore_index=True)
+    return df_predictions
+
+
+def get_observations_subset(df_actual, start_date=None, end_date=None):
+
+    df_actual = df_actual.set_index('observation')
+    df_actual = df_actual.transpose().reset_index()
+    if start_date is not None:
+        start = df_actual.index[df_actual['index'] == start_date].tolist()[0]
+    else:
+        start = df_actual.index.min()
+    if end_date is not None:
+        end = df_actual.index[df_actual['index'] == end_date].tolist()[0]
+    else:
+        end = df_actual.index.max()
+    df_actual = df_actual[start: end + 1]
+    df_actual['index'] = pd.to_datetime(df_actual['index'])
+
+    return df_actual
+    
+
+def create_plots(region, region_type, train1_model_params, train2_model_params,
+                 train1_run_day, train1_start_date, train1_end_date,
+                 test_run_day, test_start_date, test_end_date,
+                 train2_run_day, train2_start_date, train2_end_date,
+                 forecast_run_day, forecast_start_date, forecast_end_date, forecast_config,
+                 data_source=None, input_filepath=None):
+    # TODO: Accept plot titles as param
+
+    # Get actual and smoothed observations
+    df_actual = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source,
+                                                              smooth=False, filepath=input_filepath)
+    df_smoothed = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source,
+                                                                smooth=True, filepath=input_filepath)
+
+    # Set start date of plots
+    plot_start_date_m1 = (datetime.strptime(train1_start_date, "%m/%d/%y") - timedelta(days=7)).strftime("%-m/%-d/%y")
+    plot_start_date_m2 = (datetime.strptime(train2_start_date, "%m/%d/%y") - timedelta(days=7)).strftime("%-m/%-d/%y")
+
+    # Get actual and smoothed observations in the correct ranges
+    df_actual_m1 = get_observations_subset(df_actual, plot_start_date_m1, test_end_date)
+    df_smoothed_m1 = get_observations_subset(df_smoothed, plot_start_date_m1, test_end_date)
+    df_actual_m2 = get_observations_subset(df_actual, plot_start_date_m2, train2_end_date)
+    df_smoothed_m2 = get_observations_subset(df_smoothed, plot_start_date_m2, train2_end_date)
+
+    # Get predictions for M1 train and test intervals
+    # Get train predictions for M1, add run day observations and convert the date column to datetime
+    # Get test predictions for M1 until the end of the forecast interval to include planning date for uncertainty
+    # Retain only predictions in test range, add run day observations and convert the date column to datetime
+
+    df_predictions_train_m1 = forecast(train1_model_params, train1_run_day, train1_start_date, train1_end_date,
+                                       forecast_config)
+    df_predictions_train_m1 = add_init_observations_to_predictions(df_actual, df_predictions_train_m1, train1_run_day)
+    df_predictions_train_m1['date'] = pd.to_datetime(df_predictions_train_m1['date'])
+    df_predictions_test_m1 = forecast(train1_model_params, test_run_day, test_start_date, forecast_end_date,
+                                      forecast_config, with_uncertainty=True)
+    start_date, end_date = datetime.strptime(test_start_date, '%m/%d/%y'), datetime.strptime(test_end_date, '%m/%d/%y')
+    delta = (end_date - start_date).days
+    days = []
+    for i in range(delta + 1):
+        days.append((start_date + timedelta(days=i)).strftime('%-m/%-d/%-y'))
+    df_predictions_test_m1 = df_predictions_test_m1.set_index('date').loc[days].reset_index()
+    df_predictions_test_m1 = add_init_observations_to_predictions(df_actual, df_predictions_test_m1, test_run_day)
+    df_predictions_test_m1['date'] = pd.to_datetime(df_predictions_test_m1['date'])
+
+    # Get predictions for M2 train and forecast intervals
+    # Get train predictions for M2, add run day observations and convert the date column to datetime
+    # Get forecast predictions for M2, add run day observations and convert the date column to datetime
+
+    df_predictions_train_m2 = forecast(train2_model_params, train2_run_day, train2_start_date, train2_end_date,
+                                       forecast_config)
+    df_predictions_train_m2 = add_init_observations_to_predictions(df_actual, df_predictions_train_m2, train2_run_day)
+    df_predictions_train_m2['date'] = pd.to_datetime(df_predictions_train_m2['date'])
+    df_predictions_forecast_m2 = forecast(train2_model_params, forecast_run_day, forecast_start_date, forecast_end_date,
+                                          forecast_config, with_uncertainty=True)
+    df_predictions_forecast_m2 = add_init_observations_to_predictions(df_actual, df_predictions_forecast_m2,
+                                                                      forecast_run_day)
+    df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'])
+
+    # Get percentiles to be plotted
+    uncertainty_params = forecast_config['model_parameters']['uncertainty_parameters']
+    percentiles = uncertainty_params['percentiles'] + uncertainty_params['ci']
+    column_tags = [str(i) for i in percentiles]
+    column_tags.append('mean')
+    planning_date = uncertainty_params['date_of_interest']
+    column_of_interest = uncertainty_params['column_of_interest']
+
+    region_name = " ".join(region)
+
+    # Create M1, M2, M2 forecast plots
+    m1_plots(region_name, df_actual_m1, df_smoothed_m1, df_predictions_train_m1, df_predictions_test_m1,
+             train1_start_date, test_start_date, column_tags=column_tags)
+    m2_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_train_m2, train2_start_date,
+             column_tags=column_tags)
+    m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_train_m2, df_predictions_forecast_m2,
+                      train2_start_date, forecast_start_date, column_tags=column_tags)
 
 
 def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_date, test_run_day, test_start_date,
