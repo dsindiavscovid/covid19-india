@@ -60,7 +60,7 @@
         "beta": 0.9399626141038897,
         "MAPE": 48.61935822410172,
         "modes": {
-            "predict_mode": "with_uncertainty"
+            "predict_mode": "predictions_with_uncertainty"
         },
         "uncertainty_parameters": {
             "include_mean": "True",

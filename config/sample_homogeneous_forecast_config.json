@@ -50,10 +50,11 @@
    "1": 1506.0568746155632},
   "beta": 0.27702349035285123,
    "uncertainty_parameters":{
-       "date_of_interest": "6/6/20",
+       "include_mean": "True",
+       "date_of_interest": "6/15/20",
        "column_of_interest": "confirmed",
-       "percentiles": [40, 50, 90],
-       "ci": [95],
+       "percentiles": [10, 20, 30, 40, 50, 60, 70, 80, 90],
+       "ci": [95, 99],
        "tolerance": 1,
        "param_key_of_interest": "r0"
        }

@@ -30,7 +30,7 @@
         "recovery_period" : [1, 15],
         "deceased_period" : [1, 15],
         "recovered_ratio" : [0.7, 1],
-        "beta": [0, 2]
+        "beta": [0, 20]
 	},
 	"search_parameters": {
         "child_model": {
