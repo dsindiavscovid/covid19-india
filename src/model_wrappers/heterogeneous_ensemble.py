@@ -19,6 +19,7 @@ from utils.loss_util import evaluate_for_forecast
 class HeterogeneousEnsemble(ModelWrapperBase):
 
     def __init__(self, model_parameters):
+        # TODO: Shift to helper function
         self.model_parameters = model_parameters
         self.models = deepcopy(model_parameters['constituent_models'])
         self.losses = deepcopy(model_parameters['constituent_model_losses'])
@@ -77,7 +78,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
     def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                 end_date: str, **kwargs):
-        if self.model_parameters['modes']['predict_mode'] == 'with_uncertainty':
+        if self.model_parameters['modes']['predict_mode'] == 'predictions_with_uncertainty':
             return self.predict_with_uncertainty(region_metadata, region_observations, run_day, start_date, end_date)
         else:
             return self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date, **kwargs)
@@ -124,6 +125,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         beta = self.model_parameters['beta']
         precomputed_pred = kwargs.get("precomputed_pred", None)
         is_tuning = kwargs.get("is_tuning", False)
+
         # Get predictions from constituent models
         if precomputed_pred is None:
             predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
@@ -148,9 +150,9 @@ class HeterogeneousEnsemble(ModelWrapperBase):
     
         return mean_predictions_df
     
-    # Helper function to get the model indexes for 
-    def _get_index_for_percentile_helper(self, column_of_interest, date_of_interest, tolerance, percentiles, region_metadata, region_observations, run_day, start_date, end_date):
-        
+    # Helper function to get the model indexes
+    def _get_index_for_percentile_helper(self, column_of_interest, date_of_interest, tolerance, percentiles,
+                                         region_metadata, region_observations, run_day, start_date, end_date):
 
         # Get predictions, mean predictions and weighted predictions
         predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
@@ -180,7 +182,6 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         for p in percentiles:
             percentiles_dict[p] = get_best_index(df, p, tolerance)
         return percentiles_dict, predictions_df_dict
-        
 
     def predict_with_uncertainty(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
                                  start_date: str, end_date: str, **kwargs):
@@ -210,9 +211,11 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         for c in ci:
             confidence_intervals.extend([50 - c/2, 50 + c/2])
         tolerance = uncertainty_params['tolerance']
-        print(date_of_interest)
-        percentiles_dict, predictions_df_dict = self._get_index_for_percentile_helper(column_of_interest, date_of_interest, tolerance, percentiles+confidence_intervals, region_metadata, region_observations, run_day, start_date, end_date)
-        
+
+        percentiles_dict, predictions_df_dict = self._get_index_for_percentile_helper(
+            column_of_interest, date_of_interest, tolerance, percentiles+confidence_intervals,
+            region_metadata, region_observations, run_day, start_date, end_date)
+
         # Create dictionary of dataframes for percentiles
         percentiles_predictions = dict()
         for key in percentiles_dict.keys():
@@ -232,7 +235,8 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         return percentiles_predictions
     
-    def get_params_for_percentiles(self, column_of_interest, date_of_interest, tolerance, percentiles, region_metadata, region_observations, run_day, start_date, end_date):
+    def get_params_for_percentiles(self, column_of_interest, date_of_interest, tolerance, percentiles,
+                                   region_metadata, region_observations, run_day, start_date, end_date):
         
         percentiles_dict, _ = self._get_index_for_percentile_helper(column_of_interest, date_of_interest, tolerance,
                                                                     percentiles, region_metadata, region_observations, 
@@ -242,5 +246,3 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             return_dict[decile] = self.models[percentiles_dict[decile]].model_parameters
     
         return return_dict
-        
-    
