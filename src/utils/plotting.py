@@ -133,7 +133,8 @@ def multivariate_case_count_plot(df_actual, df_smoothed=None, df_predictions_tra
 
 
 def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_predictions_train=None,
-                                    df_predictions_test=None, column_tags=None, vertical_lines=None, title='', path=''):
+                                    df_predictions_test=None, column_tags=None, vertical_lines=None, title='',
+                                    path=None):
     """Creates a plot for a single variable
 
     Args:
@@ -231,14 +232,16 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
                                  df_predictions_train=df_predictions_train, df_predictions_test=df_predictions_test,
                                  variables=variables, column_label='mean', column_tag='mean',
-                                 vertical_lines=vertical_lines, title=f'{region_name}: M1 fit')
+                                 vertical_lines=vertical_lines, title=f'{region_name}: M1 fit',
+                                 path=f'{region_name}_m1.png')
 
     # Single variable plot
     for variable in variables:
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_train=df_predictions_train,
                                         df_predictions_test=df_predictions_test, column_tags=column_tags,
-                                        vertical_lines=vertical_lines, title=f'{region_name}: M1 fit - {variable}')
+                                        vertical_lines=vertical_lines, title=f'{region_name}: M1 fit - {variable}',
+                                        path=f'{region_name}_{variable}_m1.png')
 
 
 def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_start_date, column_tags=None,
@@ -268,19 +271,21 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
                                  df_predictions_train=df_predictions_train, df_predictions_test=None,
                                  variables=variables, column_label='mean', column_tag='mean',
-                                 vertical_lines=vertical_lines, title=f'{region_name}: M2 fit')
+                                 vertical_lines=vertical_lines, title=f'{region_name}: M2 fit',
+                                 path=f'{region_name}_m2.png')
 
     # Single variable plot
     for variable in variables:
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_train=df_predictions_train, df_predictions_test=None,
                                         column_tags=column_tags, vertical_lines=vertical_lines,
-                                        title=f'{region_name}: M2 fit - {variable}')
+                                        title=f'{region_name}: M2 fit - {variable}',
+                                        path=f'{region_name}_{variable}_m2.png')
 
 
 def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_forecast,
                       train2_start_date, forecast_start_date, column_tags=None, variables=None):
-    """Creates all M1 plots
+    """Creates all M2 forecast plots
 
     Args:
         region_name (str): name of region
@@ -310,7 +315,8 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train,
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
                                  df_predictions_train=df_predictions_train, df_predictions_test=df_predictions_forecast,
                                  variables=variables, column_label='mean', column_tag='mean',
-                                 vertical_lines=vertical_lines, title=f'{region_name}: M2 forecast')
+                                 vertical_lines=vertical_lines, title=f'{region_name}: M2 forecast',
+                                 path=f'{region_name}_m2_forecast.png')
 
     # Single variable plot
     for variable in variables:
@@ -318,5 +324,6 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train,
                                         df_predictions_train=df_predictions_train,
                                         df_predictions_test=df_predictions_forecast, column_tags=column_tags,
                                         vertical_lines=vertical_lines,
-                                        title=f'{region_name}: M2 forecast - {variable}')
+                                        title=f'{region_name}: M2 forecast - {variable}',
+                                        path=f'{region_name}_{variable}_m2_forecast.png')
 
