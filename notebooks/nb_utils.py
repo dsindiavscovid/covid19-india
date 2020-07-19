@@ -1,21 +1,17 @@
 import json
-
-import mlflow
-
 from copy import deepcopy
 from datetime import datetime, timedelta
 
+import mlflow
 import pandas as pd
-from configs.base_config import TrainingModuleConfig
+from configs.base_config import ForecastingModuleConfig
 from configs.base_config import ModelEvaluatorConfig
+from configs.base_config import TrainingModuleConfig
 from matplotlib import pyplot as plt, dates as mdates
-
 from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
-from configs.base_config import ForecastingModuleConfig
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
-
 from utils.plotting import m1_plots, m2_plots, m2_forecast_plots
 
 
@@ -85,9 +81,7 @@ def train_eval(region, region_type,
                max_evals=1000, data_source=None, input_filepath=None,
                mlflow_log=True, name_prefix=None):
     """
-        #TODO: Need to add hooks to consume data from appropriate source
-
-        Run train and evualation for (basic) SEIR model.
+        Run train and evaluation for (basic) SEIR model.
     
     Arguments:
         region, region_type : Region info corresponding to the run
@@ -112,7 +106,7 @@ def train_eval(region, region_type,
     Output files saved : (name_prefix added in the case of non-MLflow experiments)
         Train1 : train1_output.json (name_prefix + '_train1_output.json')
         Train2 : train2_output.json (name_prefix + '_train2_output.json')
-        Test   : test_output.json   (name_prefix + '_test_output.json')
+        Test   : test1_output.json   (name_prefix + '_test1_output.json')
     """
     
     # Save metrics and params for logging
@@ -184,9 +178,9 @@ def train_eval(region, region_type,
     test_config['input_filepath'] = input_filepath
         
     if mlflow_log:
-        test_config['output_filepath'] = 'test_output.json'
+        test_config['output_filepath'] = 'test1_output.json'
     else:
-        test_config['output_filepath'] = name_prefix + '_test_output.json'
+        test_config['output_filepath'] = name_prefix + '_test1_output.json'
 
     test_module_config = ModelEvaluatorConfig.parse_obj(test_config) 
     eval_results = ModelEvaluator.from_config(test_module_config)
@@ -241,18 +235,20 @@ def train_eval(region, region_type,
 
 def forecast(model_params, run_day, forecast_start_date, forecast_end_date, default_forecast_config,
              with_uncertainty=False):
-    """
-        Generate forecasts for a chosen interval using model parameters
+    """Generate forecasts for a chosen interval using model parameters
 
-    Arguments:
-        model_params : Model parameters (dict)
-        run_day : Date to initialize model paramters
-        forecast_start_date, forecast_end_date : Forecast interval
+    Args:
+        model_params (dict): Model parameters
+        run_day (str): date to initialize model parameters
+        forecast_start_date (str): start date of forecast
+        forecast_end_date (str): end date of forecast
+        default_forecast_config (dict): default forecast configuration
+        with_uncertainty (bool, optional): if True, forecast with uncertainty
 
     Returns:
-        forecast_df : Dataframe containing forecasts
+        pd.DataFrame : dataframe containing forecasts
     """
-    # TODO: Fix - if data_source is not specified in config the next line throws an error
+
     eval_config = ForecastingModuleConfig.parse_obj(default_forecast_config)
     eval_config.data_source = model_params['data_source']
     eval_config.region_name = model_params['region']
@@ -346,7 +342,7 @@ def set_dates(current_day, train_period=7, test_period=7):
     
     dates = dict()
     
-    # Train1 : 1 week interval starting 2 weeks prior to current day
+    # Train1
     train1_start_date = current_day - timedelta(train_period+test_period)
     train1_end_date = current_day - timedelta(test_period+1)
     train1_run_day = train1_start_date - timedelta(1)
@@ -355,7 +351,7 @@ def set_dates(current_day, train_period=7, test_period=7):
     dates['train1_end_date'] = train1_end_date.strftime("%-m/%-d/%y")
     dates['train1_run_day'] = train1_run_day.strftime("%-m/%-d/%y")
 
-    # Train2 : 1 week interval starting 1 week prior to current day
+    # Train2
     train2_start_date = current_day - timedelta(train_period)
     train2_end_date = current_day
     train2_run_day = train2_start_date - timedelta(1)
@@ -364,7 +360,7 @@ def set_dates(current_day, train_period=7, test_period=7):
     dates['train2_end_date'] = train2_end_date.strftime("%-m/%-d/%y")
     dates['train2_run_day'] = train2_run_day.strftime("%-m/%-d/%y")
 
-    # Test: 1 week interval prior to current day
+    # Test1
     test_start_date = current_day - timedelta(test_period)
     test_end_date = current_day
     test_run_day = test_start_date - timedelta(1)
@@ -381,7 +377,6 @@ def train_eval_plot(region, region_type,
                     default_train_config, default_test_config, default_forecast_config,
                     max_evals=1000, data_source=None, input_filepath=None,
                     mlflow_log=False, mlflow_run_name=None):
-    
     """
         Run train, evaluation and plotting. 
     
@@ -445,7 +440,7 @@ def train_eval_plot(region, region_type,
             mlflow.log_artifact(name_prefix+'_m3.png')
             mlflow.log_artifact('train_config.json')
             mlflow.log_artifact('train1_output.json')
-            mlflow.log_artifact('test_output.json')
+            mlflow.log_artifact('test1_output.json')
             mlflow.log_artifact('train2_output.json')
 
 
@@ -515,9 +510,9 @@ def train_eval_ensemble(region, region_type,
     test_config['input_filepath'] = input_filepath
 
     if mlflow_log:
-        test_config['output_filepath'] = 'test_output.json'
+        test_config['output_filepath'] = 'test1_output.json'
     else:
-        test_config['output_filepath'] = name_prefix + '_test_output.json'
+        test_config['output_filepath'] = name_prefix + '_test1_output.json'
 
     test_module_config = ModelEvaluatorConfig.parse_obj(test_config)
     eval_results = ModelEvaluator.from_config(test_module_config)
@@ -611,11 +606,12 @@ def train_eval_plot_ensemble(region, region_type,
             mlflow.log_artifact(name_prefix+'_m3.png')
             mlflow.log_artifact('train_config.json')
             mlflow.log_artifact('train1_output.json')
-            mlflow.log_artifact('test_output.json')
+            mlflow.log_artifact('test1_output.json')
             mlflow.log_artifact('train2_output.json')
 
 
 def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
+
     init_observations = get_observations_subset(df_actual, run_day, run_day)
     init_observations_df = pd.DataFrame(columns=df_predictions.columns)
     for col in init_observations_df.columns:
@@ -652,7 +648,7 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
                  train2_run_day, train2_start_date, train2_end_date,
                  forecast_run_day, forecast_start_date, forecast_end_date, forecast_config,
                  data_source=None, input_filepath=None):
-    # TODO: Accept plot titles as param
+    # TODO: Accept plot titles/paths as params
 
     # Get actual and smoothed observations
     df_actual = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source,
