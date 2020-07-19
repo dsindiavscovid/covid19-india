@@ -36,7 +36,21 @@ def convert_to_jhu_format_with_min_max(predictions_df, region_type, region_name,
     preddf.insert(2, 'Country', 'India')
     preddf.insert(3, 'Lat', 20)
     preddf.insert(4, 'Long', 70)
-    preddf.rename_axis(columns={"date": None}, inplace=True) # if no json conversion
+    preddf.rename_axis(columns={"date": None}, inplace=True)  # if no json conversion
+    return preddf
+
+
+def convert_to_required_format(predictions_df, region_type, region_name):
+    preddf = predictions_df.set_index('date')
+    columns = [ForecastVariable.active.name, ForecastVariable.hospitalized.name, ForecastVariable.icu.name,
+               ForecastVariable.recovered.name, ForecastVariable.deceased.name, ForecastVariable.confirmed.name]
+    for col in columns:
+        preddf = preddf.rename(columns={col: col + '_mean'})
+    preddf.insert(0, 'Region Type', region_type)
+    preddf.insert(1, 'Region', " ".join(region_name))
+    preddf.insert(2, 'Country', 'India')
+    preddf.insert(3, 'Lat', 20)
+    preddf.insert(4, 'Long', 70)
     return preddf
 
 
@@ -53,7 +67,7 @@ def convert_to_jhu_format(predictions_df, region_type, region_name):
     preddf.insert(2, 'Country', 'India')
     preddf.insert(3, 'Lat', 20)
     preddf.insert(4, 'Long', 70)
-    preddf.rename_axis(columns={"date": None}, inplace=True) # if no json conversion
+    preddf.rename_axis(columns={"date": None}, inplace=True)  # if no json conversion
     return preddf
 
 

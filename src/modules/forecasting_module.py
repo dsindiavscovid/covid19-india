@@ -4,7 +4,8 @@ from entities.model_class import ModelClass
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from utils.config_util import read_config_file
-from utils.data_transformer_helper import convert_to_jhu_format, convert_to_old_required_format
+from utils.data_transformer_helper import convert_to_jhu_format, convert_to_old_required_format, \
+    convert_to_required_format
 
 
 class ForecastingModule(object):
@@ -14,11 +15,10 @@ class ForecastingModule(object):
         self._model = ModelFactory.get_model(model_class, model_parameters)
 
     def predict(self, region_type: str, region_name: str, region_metadata: dict, region_observations: pd.DataFrame,
-                run_day: str, forecast_start_date: str,
-                forecast_end_date: str):
+                run_day: str, forecast_start_date: str, forecast_end_date: str):
         predictions_df = self._model.predict(region_metadata, region_observations, run_day, forecast_start_date,
                                              forecast_end_date)
-        predictions_df = convert_to_jhu_format(predictions_df, region_type, region_name)
+        predictions_df = convert_to_required_format(predictions_df, region_type, region_name)
         return predictions_df
 
     def predict_old_format(self, region_type: str, region_name: str, region_metadata: dict,
