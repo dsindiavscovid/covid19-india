@@ -9,7 +9,7 @@ from hyperopt import hp
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
 from model_wrappers.base import ModelWrapperBase
-import model_wrappers.model_factory as model_factory_alias
+from model_wrappers import model_factory as model_factory_alias
 from utils.ensemble_util import get_weighted_predictions, create_trials_dataframe, uncertainty_dict_to_df
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
 from utils.hyperparam_util import hyperparam_tuning
@@ -80,8 +80,12 @@ class HeterogeneousEnsemble(ModelWrapperBase):
                 end_date: str, **kwargs):
         if self.model_parameters['modes']['predict_mode'] == 'predictions_with_uncertainty':
             return self.predict_with_uncertainty(region_metadata, region_observations, run_day, start_date, end_date)
-        else:
+        elif self.model_parameters['modes']['predict_mode'] == 'best_fit':
+            return self.predict_best_fit(region_metadata, region_observations, run_day, start_date, end_date)
+        elif self.model_parameters['modes']['predict_mode'] == 'mean_predictions':
             return self.predict_mean(region_metadata, region_observations, run_day, start_date, end_date, **kwargs)
+        else:
+            raise Exception("Invalid Predict Mode")
 
     def get_predictions_dict(self, region_metadata, region_observations, run_day, start_date, end_date):
         """Gets predictions for all constituent models
@@ -103,7 +107,16 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             predictions_df = model.predict(region_metadata, region_observations, run_day, start_date, end_date)
             predictions_df_dict[idx] = predictions_df.set_index("date")
         return predictions_df_dict
-
+    
+    def predict_best_fit(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
+                     end_date: str):
+        
+        bestLossIdx = min(self.losses, key=self.losses.get)
+        bestFitModel = self.models[bestLossIdx]
+        return bestFitModel.predict(region_metadata, region_observations, run_day, start_date, end_date)
+            
+            
+    
     def predict_mean(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                      end_date: str, **kwargs):
         """Gets weighted mean predictions using constituent models
