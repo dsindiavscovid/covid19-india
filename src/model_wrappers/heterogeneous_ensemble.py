@@ -100,7 +100,6 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         Returns:
             dict(str:pd.DataFrame): dictionary of the form {index: predictions} for constituent models
         """
-
         predictions_df_dict = dict()
         for idx in self.models:
             model = self.models[idx]
@@ -139,6 +138,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         precomputed_pred = kwargs.get("precomputed_pred", None)
         is_tuning = kwargs.get("is_tuning", False)
         # Get predictions from constituent models
+        
         if precomputed_pred is None:
             predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
                                                             run_day, start_date, end_date)

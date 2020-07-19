@@ -113,10 +113,12 @@ class SEIHRD_gen(ModelWrapperBase):
         params = dict()
         params['latent_params'] = dict()
         ed = prediction_dataset[prediction_dataset['date'] == end_date]
-#         rd = prediction_dataset[prediction_dataset['date'] == run_day]
+        rd = prediction_dataset[prediction_dataset['date'] == run_day]
         for latent_var in latent_variables:
             params['latent_params']["Latent_" + latent_var.name +"_ratio"] = dict()
-            params['latent_params']["Latent_" + latent_var.name +"_ratio"][run_day] = self.model_parameters.get(latent_var.name+"_ratio")
+#             params['latent_params']["Latent_" + latent_var.name +"_ratio"][run_day] = self.model_parameters.get(latent_var.name+"_ratio")
+            params['latent_params']["Latent_" + latent_var.name +"_ratio"][run_day] = float(rd[latent_var.name]) / float(
+            rd[latent_on.name])
             params['latent_params']["Latent_" + latent_var.name +"_ratio"][end_date] = float(ed[latent_var.name]) / float(
             ed[latent_on.name])
         return params
@@ -167,12 +169,29 @@ class SEIHRD_gen(ModelWrapperBase):
                 initDict[var.name] = datasets[latent_on.name][run_day] * self.model_parameters.get(var.name + '_ratio')
 
         else:
-            pick_day = run_day
-            while (not pick_day in self.model_parameters.get("Latent_{}_ratio".format(latent_variables[0].name))):
-                pick_day = (datetime.strptime(pick_day, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
-            for var in latent_variables:
-                initDict[var.name] = datasets[latent_on.name][run_day]* self.model_parameters.get('Latent_{}_ratio'.format(var.name)).get(pick_day)
+            if (run_day not in self.model_parameters.get("Latent_{}_ratio".format(latent_variables[0].name))):
+                """
+                When model_parameters don't have latent_params for run day, 
+                we run the model from the most recent day for which we have latent_params till the run_day 
+                
+                """
 
+                
+                latent_days = list(self.model_parameters.get("Latent_{}_ratio".format(latent_variables[0].name)).keys())
+                days = []
+                for day in latent_days:
+                    days.append(datetime.strptime(day, "%m/%d/%y"))
+                temp_run_day = datetime.strftime(max(days), "%-m/%-d/%y")
+                
+                new_latent_params = self.get_latent_params(region_metadata, region_observations, temp_run_day, run_day,
+                          latent_variables = latent_variables, latent_on = latent_on)['latent_params']
+                
+                for latent_key in new_latent_params:
+                    self.model_parameters[latent_key].update(new_latent_params[latent_key])
+                                                             
+                
+            for var in latent_variables:
+                initDict[var.name] = datasets[latent_on.name][run_day]* self.model_parameters.get('Latent_{}_ratio'.format(var.name)).get(run_day)
          
         
         for var in self.input_variables():
@@ -188,7 +207,6 @@ class SEIHRD_gen(ModelWrapperBase):
         
     def run(self, region_observations: pd.DataFrame, region_metadata, run_day: str, n_days: int, 
             latent_variables: list, latent_on: ForecastVariable):
-
         estimator = self.get_model_with_params(region_metadata, region_observations, run_day, latent_variables, latent_on)
         
         estimator.run(T=n_days, verbose=False)
