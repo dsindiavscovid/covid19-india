@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt, dates as mdates
 from modules.data_fetcher_module import DataFetcherModule
 
 # TODO: Should this be in a plot config json
+from utils.distribution_util import weights_to_pdf, pdf_to_cdf
 
 plot_colors = {
     "confirmed": "C0",
@@ -38,14 +39,15 @@ def plot_vertical_lines(ax, vertical_lines):
             ax.axvline(x=pd.to_datetime(line['date']), ls=':', color=line['color'], label=line['label'])
 
 
-def plot_data(region, region_type, data_source=None, plot_config='plot_config.json', plot_name='default.png'):
+def plot_data(region, region_type, data_source=None, input_filepath=None, plot_config='plot_config.json', plot_name='default.png'):
 
     with open(plot_config) as fin:
         default_plot_config = json.load(fin)
 
     plot_config = deepcopy(default_plot_config)
 
-    actual = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source, smooth=False)
+    actual = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source, smooth=False,
+                                                           filepath=input_filepath)
     actual.drop(columns=['region_name', 'region_type'], inplace=True)
     actual = actual.set_index('observation').transpose().reset_index()
     actual['index'] = pd.to_datetime(actual['index'])
@@ -173,6 +175,9 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
                 if tag == 'mean':
                     plt.plot(df_predictions_test['date'], df_predictions_test[column], 'x',
                              color=plot_colors[variable], label='Predicted mean')
+                if tag == 'best':
+                    plt.plot(df_predictions_test['date'], df_predictions_test[column], '-.',
+                             color=plot_colors[variable], label='Predicted best fit')
                 else:
                     plt.plot(df_predictions_test['date'], df_predictions_test[column], '--',
                              color=plot_colors[variable], label=f'Predicted percentiles')
@@ -326,4 +331,3 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train,
                                         vertical_lines=vertical_lines,
                                         title=f'{region_name}: M2 forecast - {variable}',
                                         path=f'{region_name}_{variable}_m2_forecast.png')
-
