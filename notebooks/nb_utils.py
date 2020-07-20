@@ -12,7 +12,7 @@ from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
-from utils.plotting import m1_plots, m2_plots, m2_forecast_plots
+from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots
 
 
 def parse_params(parameters, interval='Train1'):
@@ -234,7 +234,7 @@ def train_eval(region, region_type,
 
 
 def forecast(model_params, run_day, forecast_start_date, forecast_end_date, default_forecast_config,
-             with_uncertainty=False):
+             with_uncertainty=False, include_best_fit=False):
     """Generate forecasts for a chosen interval using model parameters
 
     Args:
@@ -244,6 +244,7 @@ def forecast(model_params, run_day, forecast_start_date, forecast_end_date, defa
         forecast_end_date (str): end date of forecast
         default_forecast_config (dict): default forecast configuration
         with_uncertainty (bool, optional): if True, forecast with uncertainty
+        include_best_fit (bool, optional): if True, include best fit forecast
 
     Returns:
         pd.DataFrame : dataframe containing forecasts
@@ -266,7 +267,21 @@ def forecast(model_params, run_day, forecast_start_date, forecast_end_date, defa
     eval_config.forecast_end_date = forecast_end_date
     
     forecast_df = ForecastingModule.from_config(eval_config)
+
+    forecast_df_best_fit = pd.DataFrame()
+    if include_best_fit:
+        eval_config.model_parameters['modes']['predict_mode'] = 'best_fit'
+        forecast_df_best_fit = ForecastingModule.from_config(eval_config)
+        forecast_df_best_fit = forecast_df_best_fit.drop(columns=['Region Type', 'Region', 'Country', 'Lat', 'Long'])
+        for col in forecast_df_best_fit.columns:
+            if col.endswith('_mean'):
+                new_col = '_'.join([col.split('_')[0], 'best'])
+                forecast_df_best_fit = forecast_df_best_fit.rename(columns={col: new_col})
+            else:
+                forecast_df_best_fit = forecast_df_best_fit.rename(columns={col: '_'.join([col, 'best'])})
+
     forecast_df = forecast_df.drop(columns=['Region Type', 'Region', 'Country', 'Lat', 'Long'])
+    forecast_df = pd.concat([forecast_df_best_fit, forecast_df], axis=1)
     forecast_df = forecast_df.reset_index()
     return forecast_df
 
@@ -676,7 +691,7 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
     df_predictions_train_m1 = add_init_observations_to_predictions(df_actual, df_predictions_train_m1, train1_run_day)
     df_predictions_train_m1['date'] = pd.to_datetime(df_predictions_train_m1['date'])
     df_predictions_test_m1 = forecast(train1_model_params, test_run_day, test_start_date, forecast_end_date,
-                                      forecast_config, with_uncertainty=True)
+                                      forecast_config, with_uncertainty=True, include_best_fit=True)
     start_date, end_date = datetime.strptime(test_start_date, '%m/%d/%y'), datetime.strptime(test_end_date, '%m/%d/%y')
     delta = (end_date - start_date).days
     days = []
@@ -695,7 +710,7 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
     df_predictions_train_m2 = add_init_observations_to_predictions(df_actual, df_predictions_train_m2, train2_run_day)
     df_predictions_train_m2['date'] = pd.to_datetime(df_predictions_train_m2['date'])
     df_predictions_forecast_m2 = forecast(train2_model_params, forecast_run_day, forecast_start_date, forecast_end_date,
-                                          forecast_config, with_uncertainty=True)
+                                          forecast_config, with_uncertainty=True, include_best_fit=True)
     df_predictions_forecast_m2 = add_init_observations_to_predictions(df_actual, df_predictions_forecast_m2,
                                                                       forecast_run_day)
     df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'])
@@ -704,7 +719,7 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
     uncertainty_params = forecast_config['model_parameters']['uncertainty_parameters']
     percentiles = uncertainty_params['percentiles'] + uncertainty_params['ci']
     column_tags = [str(i) for i in percentiles]
-    column_tags.append('mean')
+    column_tags.extend(['mean', 'best'])
     planning_date = uncertainty_params['date_of_interest']
     column_of_interest = uncertainty_params['column_of_interest']
 
@@ -717,6 +732,7 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
              column_tags=column_tags)
     m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_train_m2, df_predictions_forecast_m2,
                       train2_start_date, forecast_start_date, column_tags=column_tags)
+    # distribution_plots(df_predictions_forecast_m2, column_of_interest, planning_date)
 
 
 def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_date, test_run_day, test_start_date,
