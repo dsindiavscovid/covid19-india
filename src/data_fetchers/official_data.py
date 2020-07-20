@@ -86,19 +86,19 @@ def get_data_from_db(district):
         pd.DataFrame: data frame of case counts
     """
     data_frames = get_athena_dataframes()
-    df_result = copy.copy(data_frames['covid_case_summary'])
+    df_result = copy.copy(data_frames['new_covid_case_summary'])
     df_result = df_result[df_result['district'] == district.lower()]
-    df_result = df_result.dropna(subset=['date'])
+    df_result = df_result.loc[:, :'deceased']
+    df_result.dropna(axis=0, how='any', inplace=True)
     df_result['date'] = pd.to_datetime(df_result['date'])
     df_result['date'] = df_result['date'].apply(lambda x: x.strftime("%-m/%-d/%y"))
-
-    df_result.drop(
-        ['state', 'district', 'ward_name', 'ward_no', 'mild', 'moderate', 'severe', 'critical', 'partition_0'],
-        axis=1, inplace=True)
     df_result.rename({'total': 'confirmed', 'active': 'hospitalized'}, axis='columns', inplace=True)
+    for col in df_result.columns:
+        if col in ['hospitalized', 'confirmed', 'recovered', 'deceased']:
+            df_result[col] = df_result[col].astype('int64')
     df_result = df_result.fillna(0)
-
     df_result = df_result.rename(columns={'date': 'index'})
+    df_result.drop(['state', 'district'], axis=1, inplace=True)
     df_result = df_result.set_index('index').transpose().reset_index().rename(columns={'index': "observation"})
     df_result.insert(0, column="region_name", value=district.lower().replace(',', ''))
     df_result.insert(1, column="region_type", value="district")
