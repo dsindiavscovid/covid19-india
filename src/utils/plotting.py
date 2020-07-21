@@ -9,9 +9,9 @@ from entities.forecast_variables import ForecastVariable
 from matplotlib import pyplot as plt, dates as mdates
 from modules.data_fetcher_module import DataFetcherModule
 
-# TODO: Should this be in a plot config json
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf
 
+# TODO: Should this be in a plot config json
 plot_colors = {
     "confirmed": "C0",
     "recovered": "green",
@@ -39,7 +39,8 @@ def plot_vertical_lines(ax, vertical_lines):
             ax.axvline(x=pd.to_datetime(line['date']), ls=':', color=line['color'], label=line['label'])
 
 
-def plot_data(region, region_type, data_source=None, input_filepath=None, plot_config='plot_config.json', plot_name='default.png'):
+def plot_data(region, region_type, data_source=None, input_filepath=None, plot_config='plot_config.json',
+              plot_name='default.png'):
 
     with open(plot_config) as fin:
         default_plot_config = json.load(fin)
@@ -62,7 +63,7 @@ def plot_data(region, region_type, data_source=None, input_filepath=None, plot_c
 
     for variable in plot_variables:
         ax.plot(actual['index'], actual[variable].values, plot_markers['observed'],
-                 color=plot_colors[variable], label=plot_labels[variable])
+                color=plot_colors[variable], label=plot_labels[variable])
 
     plot_format(ax)
 
@@ -136,7 +137,7 @@ def multivariate_case_count_plot(df_actual, df_smoothed=None, df_predictions_tra
 
 def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_predictions_train=None,
                                     df_predictions_test=None, column_tags=None, vertical_lines=None, title='',
-                                    path=None):
+                                    path=None, debug=False):
     """Creates a plot for a single variable
 
     Args:
@@ -162,11 +163,29 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
         plt.plot(df_smoothed['index'], df_smoothed[variable], '-',
                  color=plot_colors[variable], label=f'Smoothed')
 
-    if df_predictions_train is not None:
-        plt.plot(df_predictions_train['date'], df_predictions_train[f'{variable}_mean'], 'x',
-                 color=plot_colors[variable], label='Predicted mean')
-
     percentile_labels = []
+
+    if debug:
+        if df_predictions_train is not None and column_tags is not None:
+            for tag in column_tags:
+                column = '_'.join([variable, tag])
+                if column in df_predictions_train.columns:
+                    if tag == 'mean':
+                        plt.plot(df_predictions_train['date'], df_predictions_train[column], 'x',
+                                 color=plot_colors[variable], label='Predicted mean')
+                    if tag == 'best':
+                        plt.plot(df_predictions_train['date'], df_predictions_train[column], '-.',
+                                 color=plot_colors[variable], label='Predicted best fit')
+                    else:
+                        plt.plot(df_predictions_train['date'], df_predictions_train[column], '--',
+                                 color=plot_colors[variable], label=f'Predicted percentiles')
+                    percentile_labels.append(plt.text(
+                        x=df_predictions_train['date'].iloc[-1],
+                        y=df_predictions_train[column].iloc[-1], s=tag))
+    else:
+        if df_predictions_train is not None:
+            plt.plot(df_predictions_train['date'], df_predictions_train[f'{variable}_mean'], 'x',
+                     color=plot_colors[variable], label='Predicted mean')
 
     if df_predictions_test is not None and column_tags is not None:
         for tag in column_tags:
@@ -206,7 +225,7 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
 
 
 def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_test,
-             train1_start_date, test1_start_date, column_tags=None, variables=None):
+             train1_start_date, test1_start_date, column_tags=None, variables=None, debug=False):
     """Creates all M1 plots
 
     Args:
@@ -246,11 +265,11 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
                                         df_predictions_train=df_predictions_train,
                                         df_predictions_test=df_predictions_test, column_tags=column_tags,
                                         vertical_lines=vertical_lines, title=f'{region_name}: M1 fit - {variable}',
-                                        path=f'{region_name}_{variable}_m1.png')
+                                        path=f'{region_name}_{variable}_m1.png', debug=debug)
 
 
 def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_start_date, column_tags=None,
-             variables=None):
+             variables=None, debug=False):
     """Creates all M2 plots
 
     Args:
@@ -285,11 +304,11 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
                                         df_predictions_train=df_predictions_train, df_predictions_test=None,
                                         column_tags=column_tags, vertical_lines=vertical_lines,
                                         title=f'{region_name}: M2 fit - {variable}',
-                                        path=f'{region_name}_{variable}_m2.png')
+                                        path=f'{region_name}_{variable}_m2.png', debug=debug)
 
 
 def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_forecast,
-                      train2_start_date, forecast_start_date, column_tags=None, variables=None):
+                      train2_start_date, forecast_start_date, column_tags=None, variables=None, debug=False):
     """Creates all M2 forecast plots
 
     Args:
@@ -330,4 +349,4 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train,
                                         df_predictions_test=df_predictions_forecast, column_tags=column_tags,
                                         vertical_lines=vertical_lines,
                                         title=f'{region_name}: M2 forecast - {variable}',
-                                        path=f'{region_name}_{variable}_m2_forecast.png')
+                                        path=f'{region_name}_{variable}_m2_forecast.png', debug=debug)
