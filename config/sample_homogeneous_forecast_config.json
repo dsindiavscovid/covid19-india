@@ -51,7 +51,7 @@
   "beta": 0.27702349035285123,
    "uncertainty_parameters":{
        "include_mean": "True",
-       "date_of_interest": "6/15/20",
+       "date_of_interest": "",
        "column_of_interest": "confirmed",
        "percentiles": [10, 20, 30, 40, 50, 60, 70, 80, 90],
        "ci": [95, 99],
