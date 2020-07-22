@@ -46,6 +46,13 @@ class HeterogeneousEnsemble(ModelWrapperBase):
     def is_black_box(self):
         return True
 
+    def _get_weights(self):
+        beta = self.model_parameters['beta']
+        if self.weights is None:
+            return {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            return deepcopy(self.weights)
+
     def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,
               train_end_date: str, search_space: dict, search_parameters: dict, train_loss_function: LossFunction):
         result = {}
@@ -109,14 +116,12 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         return predictions_df_dict
     
     def predict_best_fit(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
-                     end_date: str):
+                         end_date: str):
         
-        bestLossIdx = min(self.losses, key=self.losses.get)
-        bestFitModel = self.models[bestLossIdx]
-        return bestFitModel.predict(region_metadata, region_observations, run_day, start_date, end_date)
-            
-            
-    
+        best_loss_idx = min(self.losses, key=self.losses.get)
+        best_fit_model = self.models[best_loss_idx]
+        return best_fit_model.predict(region_metadata, region_observations, run_day, start_date, end_date)
+
     def predict_mean(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                      end_date: str, **kwargs):
         """Gets weighted mean predictions using constituent models
@@ -259,3 +264,36 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             return_dict[decile] = self.models[percentiles_dict[decile]].model_parameters
     
         return return_dict
+
+    def get_trials_distribution(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
+                                start_date: str, end_date: str):
+        # Unpack uncertainty parameters
+        uncertainty_params = self.model_parameters['uncertainty_parameters']
+        date_of_interest = uncertainty_params['date_of_interest']
+        column_of_interest = uncertainty_params['column_of_interest']
+
+        # Get predictions, mean predictions and weighted predictions
+        predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
+                                                        run_day, start_date, end_date)
+
+        # Get predictions for a specific column on date of interest
+        trials_df = create_trials_dataframe(predictions_df_dict, column_of_interest)
+        try:
+            predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
+        except KeyError:
+            raise Exception("The planning date is not in the range of predicted dates")
+        beta = self.model_parameters['beta']
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = deepcopy(self.weights)
+        df = pd.DataFrame.from_dict(weights, orient='index', columns=['weight'])
+        df = df.join(predictions_doi.set_index(df.index))
+        df = df.rename(columns={date_of_interest: 'case_counts'})
+
+        # Find PDF, CDF
+        df['pdf'] = weights_to_pdf(df['weight'])
+        df = df.sort_values(by='case_counts').reset_index()
+        df['cdf'] = pdf_to_cdf(df['pdf'])
+
+        return df
