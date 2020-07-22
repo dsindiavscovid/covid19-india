@@ -68,12 +68,15 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         confidence_intervals = {"low": alpha/2, "high": 100-alpha/2}
         window = uncertainty_params['window']
         
-        if(self.weights == None):
-            self.weights = {idx: np.exp(-self.model_parameters['beta'] * loss) for idx, loss in self.losses.items()}
-        
+        beta = float(self.model_parameters['beta'])
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = deepcopy(self.weights)
+            
         params_dict = dict()
         for idx in self.model_parameters['constituent_model_losses']:
-            params_dict[idx] = [self.weights[idx], 
+            params_dict[idx] = [weights[idx], 
                                 self.model_parameters['constituent_models'][idx]['model_parameters'][param_of_interest]]
     
         params_df = pd.DataFrame.from_dict(params_dict, orient = 'index', columns = ['weight', 'ParamOfInterest'])
@@ -89,7 +92,6 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             percentiles_dict[c] = get_best_index(params_df, confidence_intervals[c], window)
             
         percentiles_params = dict()
-        print(percentiles_dict)
         for key in percentiles_dict.keys():
             percentiles_params[key] = {}
             idx = percentiles_dict[key]
@@ -103,12 +105,71 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         
         return percentiles_params
     
+    def _flatten_dict(self, oldDict, appendStr = ""):
+        newDict = dict()
+        for key in oldDict.keys():
+            if(type(oldDict[key]) ==  dict):
+                newDict.update(self._flatten_dict(oldDict[key], appendStr+key+"_"))
+            else:
+                if(isinstance(oldDict[key], float) or isinstance(oldDict[key], int)):
+                    newDict[appendStr+key] = oldDict[key]
+        return newDict
+        
+    def _get_statistics_given_indexes(self, list_of_indexes, appendStr):
+        if(len(list_of_indexes)<=0):
+            return pd.DataFrame()
+        list_of_params = dict()
+        for idx in list_of_indexes:
+            list_of_params[idx] = (self._flatten_dict(self.models[idx].model_parameters))
+        
+        keys = list(list_of_params[list_of_indexes[0]].keys())
+        
+        beta = float(self.model_parameters['beta'])
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = deepcopy(self.weights)
+            
+        s = sum(weights.values())
+        for idx in weights.keys():
+            weights[idx] = weights[idx]/s
+            
+        mean = dict()
+        mini = dict()
+        maxi = dict()
+        mean['statName'] = appendStr+"Mean"
+        mini['statName'] = appendStr+"Min"
+        maxi['statName'] = appendStr+"Max"
+        for key in keys:
+            mean[key] = np.sum([list_of_params[idx][key]*weights[idx] for idx in list_of_indexes])/sum(weights.values())
+            mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
+            maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
+            
+        return [mean, mini, maxi]
+
+    
+    def get_statistics_of_params(self, output_file_location = None):
+        sortedLossIndexes =[item[0] for item in sorted(self.losses.items(), key = lambda kv:(kv[1], kv[0]))]
+        
+        statsList = []
+        
+        statsList.extend(self._get_statistics_given_indexes(sortedLossIndexes[:10], "top10_"))
+        statsList.extend(self._get_statistics_given_indexes(sortedLossIndexes[:50], "top50_"))
+        statsList.extend(self._get_statistics_given_indexes(sortedLossIndexes, "all_"))
+        statsDF = pd.DataFrame(columns = list(statsList[0].keys()))
+        for s in statsList:
+            statsDF = statsDF.append(s, ignore_index=True)
+            
+        if output_file_location is not None:
+            statsDF.to_csv(output_file_location)
+        return statsDF
+        
+        
     
     def predict_from_mean_param(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                 end_date: str, **kwargs):
         mean_params = self.get_mean_params()
         mean_param_model = model_factory_alias.ModelFactory.get_model(self.child_model_class, mean_params)
-        print(mean_params)
         prediction_df = mean_param_model.predict(region_metadata, region_observations, run_day, start_date, end_date)
         return prediction_df
           
