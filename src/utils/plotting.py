@@ -1,15 +1,13 @@
 import json
+import os
 from copy import deepcopy
 
-import numpy as np
 import pandas as pd
-import seaborn as sns
 from adjustText import adjust_text
 from entities.forecast_variables import ForecastVariable
 from matplotlib import pyplot as plt, dates as mdates
 from modules.data_fetcher_module import DataFetcherModule
 
-from utils.distribution_util import weights_to_pdf, pdf_to_cdf
 
 # TODO: Should this be in a plot config json
 plot_colors = {
@@ -151,6 +149,7 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
             [{'date': date, 'color': color, 'label': label}]
         title (str, optional): plot title (default: '')
         path (str, optional): path to output file (default: None)
+        debug (bool, optional): if True, include additional plotting (uncertainty during training)
 
     """
 
@@ -193,10 +192,10 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
             if column in df_predictions_test.columns:
                 if tag == 'mean':
                     plt.plot(df_predictions_test['date'], df_predictions_test[column], 'x',
-                             color=plot_colors[variable], label='Predicted mean')
+                             color='black', label='Predicted mean')
                 if tag == 'best':
                     plt.plot(df_predictions_test['date'], df_predictions_test[column], '-.',
-                             color=plot_colors[variable], label='Predicted best fit')
+                             color='black', label='Predicted best fit')
                 else:
                     plt.plot(df_predictions_test['date'], df_predictions_test[column], '--',
                              color=plot_colors[variable], label=f'Predicted percentiles')
@@ -224,8 +223,48 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
         plt.savefig(path)
 
 
+def pdf_cdf_plot(variable, case_counts, pdf, cdf, vertical_lines=None, title='', path=None):
+    """Plots PDF and CDF for a variable
+
+    Args:
+        variable (str): variable to plot
+        case_counts (pd.Series): variable case counts
+        pdf (pd.Series): probability distribution function series for variable
+        cdf (pd.Series): cumulative distribution function series for variable
+        vertical_lines (list, optional): list of dict of vertical lines to be included in the plot of the form
+            [{'date': date, 'color': color, 'label': label}]
+        title (str, optional): plot title (default: '')
+        path (str, optional): path to output file (default: None)
+
+    """
+    fig, ax_pdf = plt.subplots(figsize=(12, 8))
+    ax_cdf = ax_pdf.twinx()
+
+    # Plot PDF and CDF
+    ax_pdf.plot(case_counts, pdf, 'o', color=plot_colors[variable], label=f'PDF for {variable}')
+    ax_cdf.plot(case_counts, cdf, '-', color=plot_colors[variable], label=f'CDF for {variable}')
+
+    # Plot vertical lines to mark specific events
+    plot_vertical_lines(ax_cdf, vertical_lines)
+
+    ax_cdf.set_ylim(bottom=0, top=1)
+    ax_pdf.set_ylim(bottom=0)
+    ax_pdf.set_ylabel('PDF')
+    ax_cdf.set_ylabel('CDF')
+    lines, labels = ax_pdf.get_legend_handles_labels()
+    lines2, labels2 = ax_cdf.get_legend_handles_labels()
+    ax_cdf.legend(lines + lines2, labels + labels2)
+    plt.title(title)
+    plt.xlabel('Case counts')
+    plt.grid()
+    fig.tight_layout()
+
+    if path is not None:
+        plt.savefig(path)
+
+
 def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_test,
-             train1_start_date, test1_start_date, column_tags=None, variables=None, debug=False):
+             train1_start_date, test1_start_date, column_tags=None, variables=None, output_dir='', debug=False):
     """Creates all M1 plots
 
     Args:
@@ -238,6 +277,8 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
         test1_start_date (str): start date for test1 interval
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
+        output_dir (str, optional): output directory path (default: '')
+        debug (bool, optional): if True, include additional plotting (uncertainty during training)
 
     """
 
@@ -253,23 +294,25 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
     ]
 
     # Multivariate plot with M1 mean predictions
+    path = os.path.join(output_dir, 'm1.png')
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
                                  df_predictions_train=df_predictions_train, df_predictions_test=df_predictions_test,
                                  variables=variables, column_label='mean', column_tag='mean',
-                                 vertical_lines=vertical_lines, title=f'{region_name}: M1 fit',
-                                 path=f'{region_name}_m1.png')
+                                 vertical_lines=vertical_lines, title=f'{region_name}: M1 fit', path=path)
 
     # Single variable plot
     for variable in variables:
+        file = f'm1_{variable}.png'
+        path = os.path.join(output_dir, file)
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_train=df_predictions_train,
                                         df_predictions_test=df_predictions_test, column_tags=column_tags,
                                         vertical_lines=vertical_lines, title=f'{region_name}: M1 fit - {variable}',
-                                        path=f'{region_name}_{variable}_m1.png', debug=debug)
+                                        path=path, debug=debug)
 
 
 def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_start_date, column_tags=None,
-             variables=None, debug=False):
+             variables=None, output_dir='', debug=False):
     """Creates all M2 plots
 
     Args:
@@ -280,6 +323,8 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
         train2_start_date (str): start date for train2 interval
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
+        output_dir (str, optional): output directory path (default: '')
+        debug (bool, optional): if True, include additional plotting (uncertainty during training)
 
     """
 
@@ -292,23 +337,25 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
     vertical_lines = [{'date': train2_start_date, 'color': 'brown', 'label': 'Train starts'}]
 
     # Multivariate plot with M1 mean predictions
+    path = os.path.join(output_dir, 'm2.png')
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
                                  df_predictions_train=df_predictions_train, df_predictions_test=None,
                                  variables=variables, column_label='mean', column_tag='mean',
-                                 vertical_lines=vertical_lines, title=f'{region_name}: M2 fit',
-                                 path=f'{region_name}_m2.png')
+                                 vertical_lines=vertical_lines, title=f'{region_name}: M2 fit', path=path)
 
     # Single variable plot
     for variable in variables:
+        file = f'm2_{variable}.png'
+        path = os.path.join(output_dir, file)
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_train=df_predictions_train, df_predictions_test=None,
                                         column_tags=column_tags, vertical_lines=vertical_lines,
-                                        title=f'{region_name}: M2 fit - {variable}',
-                                        path=f'{region_name}_{variable}_m2.png', debug=debug)
+                                        title=f'{region_name}: M2 fit - {variable}', path=path, debug=debug)
 
 
 def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_forecast,
-                      train2_start_date, forecast_start_date, column_tags=None, variables=None, debug=False):
+                      train2_start_date, forecast_start_date, column_tags=None, variables=None, output_dir='',
+                      debug=False):
     """Creates all M2 forecast plots
 
     Args:
@@ -321,6 +368,8 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train,
         forecast_start_date (str): start date for forecast interval
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
+        output_dir (str, optional): output directory path (default: '')
+        debug (bool, optional): if True, include additional plotting (uncertainty during training)
 
     """
 
@@ -336,17 +385,31 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train,
     ]
 
     # Multivariate plot with M1 mean predictions
+    path = os.path.join(output_dir, 'm2_forecast.png')
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
                                  df_predictions_train=df_predictions_train, df_predictions_test=df_predictions_forecast,
                                  variables=variables, column_label='mean', column_tag='mean',
-                                 vertical_lines=vertical_lines, title=f'{region_name}: M2 forecast',
-                                 path=f'{region_name}_m2_forecast.png')
+                                 vertical_lines=vertical_lines, title=f'{region_name}: M2 forecast', path=path)
 
     # Single variable plot
     for variable in variables:
+        file = f'm2_forecast_{variable}.png'
+        path = os.path.join(output_dir, file)
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_train=df_predictions_train,
                                         df_predictions_test=df_predictions_forecast, column_tags=column_tags,
                                         vertical_lines=vertical_lines,
-                                        title=f'{region_name}: M2 forecast - {variable}',
-                                        path=f'{region_name}_{variable}_m2_forecast.png', debug=debug)
+                                        title=f'{region_name}: M2 forecast - {variable}', path=path, debug=debug)
+
+
+def distribution_plots(trials, variable):
+    """Create PDF and CDF plots
+
+    Args:
+        trials (pd.DataFrame): dataframe consisting of case counts, PDF and CDF for a variable
+        variable (str): variable to plot
+
+    """
+
+    pdf_cdf_plot(variable, trials['case_counts'], trials['pdf'], trials['cdf'],
+                 title=f'PDF and CDF for {variable}', path='m2_distribution.png')

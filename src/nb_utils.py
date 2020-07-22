@@ -10,11 +10,12 @@ from configs.base_config import ForecastingModuleConfig
 from configs.base_config import ModelEvaluatorConfig
 from configs.base_config import TrainingModuleConfig
 from matplotlib import pyplot as plt, dates as mdates
+from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
-from utils.plotting import m1_plots, m2_plots, m2_forecast_plots
+from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots
 
 
 def parse_params(parameters, interval='Train1'):
@@ -574,7 +575,7 @@ def train_eval_plot_ensemble(region, region_type,
                              current_day, forecast_length,
                              default_train_config, default_test_config, default_forecast_config,
                              train_period=14, test_period=7,
-                             max_evals=1000, data_source=None, input_filepath=None,
+                             max_evals=1000, data_source=None, input_filepath=None, output_dir='',
                              mlflow_log=False, mlflow_run_name=None):
 
     name_prefix = " ".join(region)
@@ -613,7 +614,7 @@ def train_eval_plot_ensemble(region, region_type,
     create_plots(region, region_type, train1_params, train2_params, train1_run_day, train1_start_date, train1_end_date,
                  test_run_day, test_start_date, test_end_date, train2_run_day, train2_start_date, train2_end_date,
                  forecast_run_day, forecast_start_date, forecast_end_date, default_forecast_config,
-                 data_source=data_source, input_filepath=input_filepath, debug=False)
+                 data_source=data_source, input_filepath=input_filepath, output_dir=output_dir, debug=False)
    
     if mlflow_log:
         with mlflow.start_run(run_name=mlflow_run_name):
@@ -626,6 +627,7 @@ def train_eval_plot_ensemble(region, region_type,
             mlflow.log_artifact('train1_output.json')
             mlflow.log_artifact('test1_output.json')
             mlflow.log_artifact('train2_output.json')
+
     return params, metrics, train1_params, train2_params
 
 
@@ -666,7 +668,7 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
                  test_run_day, test_start_date, test_end_date,
                  train2_run_day, train2_start_date, train2_end_date,
                  forecast_run_day, forecast_start_date, forecast_end_date, forecast_config,
-                 data_source=None, input_filepath=None, debug=False):
+                 data_source=None, input_filepath=None, output_dir='', debug=False):
     # TODO: Accept plot titles/paths as params
 
     # Get actual and smoothed observations
@@ -762,19 +764,26 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
     percentiles = list(set(uncertainty_params['percentiles'] + confidence_intervals))
     column_tags = [str(i) for i in percentiles]
     column_tags.extend(['mean', 'best'])
-    planning_date = uncertainty_params['date_of_interest']
     column_of_interest = uncertainty_params['column_of_interest']
 
     region_name = " ".join(region)
 
     # Create M1, M2, M2 forecast plots
     m1_plots(region_name, df_actual_m1, df_smoothed_m1, df_predictions_train_m1, df_predictions_test_m1,
-             train1_start_date, test_start_date, column_tags=column_tags, debug=debug)
+             train1_start_date, test_start_date, column_tags=column_tags, output_dir=output_dir, debug=debug)
     m2_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_train_m2, train2_start_date,
-             column_tags=column_tags, debug=debug)
+             column_tags=column_tags, output_dir=output_dir, debug=debug)
     m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_train_m2, df_predictions_forecast_m2,
-                      train2_start_date, forecast_start_date, column_tags=column_tags, debug=debug)
-    # distribution_plots(df_predictions_forecast_m2, column_of_interest, planning_date)
+                      train2_start_date, forecast_start_date, column_tags=column_tags, output_dir=output_dir,
+                      debug=False)
+
+    # Get trials dataframe
+    region_metadata = DataFetcherModule.get_regional_metadata(region_type, region, data_source=data_source)
+    model = ModelFactory.get_model(train1_model_params['model_type'], train2_model_params['model_parameters'])
+    trials = model.get_trials_distribution(region_metadata, df_actual, forecast_run_day, forecast_start_date,
+                                           forecast_end_date)
+    # Plot PDF and CDF
+    distribution_plots(trials, column_of_interest)
 
 
 def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_date, test_run_day, test_start_date,
