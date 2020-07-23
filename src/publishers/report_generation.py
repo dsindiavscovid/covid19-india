@@ -1,4 +1,5 @@
 import chevron
+import pandas as pd
 
 
 def create_report(params, metrics, artifact_list, template_path='template.mustache', report_path='report.md'):
@@ -10,6 +11,10 @@ def create_report(params, metrics, artifact_list, template_path='template.mustac
     template_inputs.update(params)
     template_inputs.update(metrics)
     template_inputs.update(artifact_list)
+
+    for k, v in template_inputs.items():
+        if isinstance(v, pd.DataFrame):
+            template_inputs[k] = v.to_markdown()
 
     with open(template_path, 'r') as f:
         report = chevron.render(f, template_inputs)
