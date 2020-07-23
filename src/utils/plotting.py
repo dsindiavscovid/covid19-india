@@ -365,7 +365,7 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
                                         title=f'{region_name}: M2 fit - {variable}', path=path, debug=debug)
 
 
-def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_forecast,
+def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_forecast,
                       train2_start_date, forecast_start_date, column_tags=None, variables=None, output_dir='',
                       debug=False):
     """Creates all M2 forecast plots
@@ -374,7 +374,6 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train,
         region_name (str): name of region
         df_actual (pd.DataFrame): actual observations
         df_smoothed (pd.DataFrame): smoothed observations
-        df_predictions_train (pd.DataFrame): predictions for train interval
         df_predictions_forecast (pd.DataFrame): predictions for forecast interval
         train2_start_date (str): start date for train2 interval
         forecast_start_date (str): start date for forecast interval
@@ -399,7 +398,7 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train,
     # Multivariate plot with M1 mean predictions
     path = os.path.join(output_dir, 'm2_forecast.png')
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
-                                 df_predictions_train=None, df_predictions_test=df_predictions_forecast,
+                                 df_predictions_test=df_predictions_forecast,
                                  variables=variables, column_label='mean', column_tag='mean',
                                  vertical_lines=vertical_lines, title=f'{region_name}: M2 forecast', path=path)
 
@@ -408,18 +407,18 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_train,
         file = f'm2_forecast_{variable}.png'
         path = os.path.join(output_dir, file)
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
-                                        df_predictions_train=None,
                                         df_predictions_test=df_predictions_forecast, column_tags=column_tags,
                                         vertical_lines=vertical_lines,
                                         title=f'{region_name}: M2 forecast - {variable}', path=path, debug=debug)
 
 
-def distribution_plots(trials, variable):
+def distribution_plots(trials, variable, output_dir=''):
     """Create PDF and CDF plots
 
     Args:
         trials (pd.DataFrame): dataframe consisting of case counts, PDF and CDF for a variable
         variable (str): variable to plot
+        output_dir (str, optional): output directory path (default: '')
 
     """
     trials_new = deepcopy(trials)
@@ -432,4 +431,4 @@ def distribution_plots(trials, variable):
         case_counts_pdf.extend([trials_new.iloc[i, :]['case_counts']]*trials_new.iloc[i, :]['pdf'])
 
     pdf_cdf_plot(variable, trials['case_counts'], trials['cdf'], case_counts_pdf=case_counts_pdf,
-                 title=f'PDF and CDF for {variable}', path='m2_distribution.png')
+                 title=f'PDF and CDF for {variable}', path=os.path.join(output_dir, 'm2_distribution.png'))

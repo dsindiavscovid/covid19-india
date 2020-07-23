@@ -473,16 +473,16 @@ def train_eval_ensemble(region, region_type,
     params = dict()
     metrics = dict()
 
-    params['region'] = " ".join(region)
-    params['region_type'] = region_type
-    params['train1_start_date'] = train1_start_date
-    params['train1_end_date'] = train1_end_date
-    params['train2_start_date'] = train2_start_date
-    params['train2_end_date'] = train2_end_date
-    params['run_day'] = run_day
-    params['test_start_date'] = test_start_date
-    params['test_end_date'] = test_end_date
-    params['data_source'] = data_source
+    # params['region'] = " ".join(region)
+    # params['region_type'] = region_type
+    # params['train1_start_date'] = train1_start_date
+    # params['train1_end_date'] = train1_end_date
+    # params['train2_start_date'] = train2_start_date
+    # params['train2_end_date'] = train2_end_date
+    # params['run_day'] = run_day
+    # params['test_start_date'] = test_start_date
+    # params['test_end_date'] = test_end_date
+    # params['data_source'] = data_source
 
     train_config = deepcopy(default_train_config)
     train_config['data_source'] = data_source
@@ -581,6 +581,10 @@ def train_eval_plot_ensemble(region, region_type,
                              max_evals=1000, data_source=None, input_filepath=None, output_dir='',
                              mlflow_log=False, mlflow_run_name=None):
 
+    params_dict = dict()
+    metrics_dict = dict()
+    artifacts_dict = dict()
+
     name_prefix = " ".join(region)
 
     dates = set_dates(current_day, train_period, test_period)
@@ -597,6 +601,30 @@ def train_eval_plot_ensemble(region, region_type,
     test_end_date = dates['test_end_date']
     test_run_day = dates['test_run_day']
 
+    # Set forecast dates
+    forecast_start_date = (datetime.strptime(train2_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
+    forecast_run_day = (datetime.strptime(forecast_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
+    forecast_end_date = (
+            datetime.strptime(forecast_start_date, "%m/%d/%y") + timedelta(days=forecast_length)).strftime("%-m/%-d/%y")
+
+    dates['forecast_start_date'] = forecast_start_date
+    dates['forecast_run_day'] = forecast_run_day
+    dates['forecast_end_date'] = forecast_end_date
+
+    params_dict.update({'time_interval_config': dates})
+    params_dict['region_name'] = " ".join(region)
+    params_dict['region_type'] = region_type
+    params_dict['data_source'] = data_source
+    params_dict['data_file_path'] = input_filepath if input_filepath is not None else "No path available"
+    params_dict['search_parameters'] = default_train_config['search_parameters']
+    params_dict['param_search_space_config'] = default_train_config['search_space']
+    params_dict['train_loss_function_config'] = default_train_config['training_loss_function']
+    params_dict['eval_loss_function_config'] = default_train_config['loss_functions']
+    uncertainty_params = default_forecast_config['model_parameters']['uncertainty_parameters']
+    params_dict['forecast_percentiles'] = uncertainty_params['percentiles']
+    params_dict['forecast_planning_variable'] = uncertainty_params['column_of_interest']
+    params_dict['forecast_planning_date'] = uncertainty_params['date_of_interest']
+
     params, metrics, train1_params, train2_params = train_eval_ensemble(region, region_type,
                                                                         train1_start_date, train1_end_date,
                                                                         train2_start_date, train2_end_date,
@@ -607,12 +635,6 @@ def train_eval_plot_ensemble(region, region_type,
                                                                         input_filepath=input_filepath,
                                                                         mlflow_log=mlflow_log,
                                                                         name_prefix=name_prefix)
-
-    # Set forecast dates
-    forecast_start_date = (datetime.strptime(train2_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
-    forecast_run_day = (datetime.strptime(forecast_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
-    forecast_end_date = (
-            datetime.strptime(forecast_start_date, "%m/%d/%y") + timedelta(days=forecast_length)).strftime("%-m/%-d/%y")
 
     print("Creating plots...")
     create_plots(region, region_type, train1_params, train2_params, train1_run_day, train1_start_date, train1_end_date,
@@ -633,7 +655,7 @@ def train_eval_plot_ensemble(region, region_type,
             mlflow.log_artifact('test1_output.json')
             mlflow.log_artifact('train2_output.json')
 
-    return params, metrics, train1_params, train2_params
+    return params_dict, metrics, train1_params, train2_params
 
 
 def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
@@ -778,7 +800,7 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
              train1_start_date, test_start_date, column_tags=column_tags, output_dir=output_dir, debug=debug)
     m2_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_train_m2, train2_start_date,
              column_tags=column_tags, output_dir=output_dir, debug=debug)
-    m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_train_m2, df_predictions_forecast_m2,
+    m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_forecast_m2,
                       train2_start_date, forecast_start_date, column_tags=column_tags, output_dir=output_dir,
                       debug=False)
 
@@ -788,7 +810,7 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
     trials = model.get_trials_distribution(region_metadata, df_actual, forecast_run_day, forecast_start_date,
                                            forecast_end_date)
     # Plot PDF and CDF
-    distribution_plots(trials, column_of_interest)
+    distribution_plots(trials, column_of_interest, output_dir=output_dir)
 
 
 def plot_m1(train1_model_params, train1_run_day, train1_start_date, train1_end_date, test_run_day, test_start_date,
