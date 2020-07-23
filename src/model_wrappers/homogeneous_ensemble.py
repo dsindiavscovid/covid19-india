@@ -283,7 +283,8 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                 self.models[idx] = model_factory_alias.ModelFactory.get_model(
                     constituent_model_class, constituent_model_parameters)
 
-            resultsBeta = super().train(region_metadata, region_observations, train_start_date,
+            train2_start_date = (datetime.strptime(train1_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
+            resultsBeta = super().train(region_metadata, region_observations, train2_start_date,
               train_end_date, onlyBetaSearchSpace, search_parameters["ensemble_model"], train_loss_function)
             self.model_parameters.update(resultsBeta['model_parameters'])
             return {"model_parameters": self.model_parameters}
