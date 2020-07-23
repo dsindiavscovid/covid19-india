@@ -359,10 +359,10 @@ def train_eval_forecast(region, region_type,
 def set_dates(current_day, train_period=7, test_period=7):
     
     dates = dict()
-    
+
     # Train1
-    train1_start_date = current_day - timedelta(train_period+test_period)
-    train1_end_date = current_day - timedelta(test_period+1)
+    train1_start_date = current_day - timedelta(train_period + test_period - 1)
+    train1_end_date = current_day - timedelta(test_period)
     train1_run_day = train1_start_date - timedelta(1)
 
     dates['train1_start_date'] = train1_start_date.strftime("%-m/%-d/%y")
@@ -370,7 +370,7 @@ def set_dates(current_day, train_period=7, test_period=7):
     dates['train1_run_day'] = train1_run_day.strftime("%-m/%-d/%y")
 
     # Train2
-    train2_start_date = current_day - timedelta(train_period)
+    train2_start_date = current_day - timedelta(train_period - 1)
     train2_end_date = current_day
     train2_run_day = train2_start_date - timedelta(1)
 
@@ -379,14 +379,14 @@ def set_dates(current_day, train_period=7, test_period=7):
     dates['train2_run_day'] = train2_run_day.strftime("%-m/%-d/%y")
 
     # Test1
-    test_start_date = current_day - timedelta(test_period)
+    test_start_date = current_day - timedelta(test_period - 1)
     test_end_date = current_day
     test_run_day = test_start_date - timedelta(1)
 
     dates['test_start_date'] = test_start_date.strftime("%-m/%-d/%y")
     dates['test_end_date'] = test_end_date.strftime("%-m/%-d/%y")
     dates['test_run_day'] = test_run_day.strftime("%-m/%-d/%y")
-    
+
     return dates
 
 
@@ -511,6 +511,7 @@ def train_eval_ensemble(region, region_type,
         assert name_prefix is not None
         train_config['output_filepath'] = name_prefix + '_train1_output.json'
 
+    print("Performing M1 fit...")
     train_module_config = TrainingModuleConfig.parse_obj(train_config)
     train_results = TrainingModule.from_config(train_module_config)
 
@@ -523,7 +524,7 @@ def train_eval_ensemble(region, region_type,
     test_config['test_start_date'] = test_start_date
     test_config['test_end_date'] = test_end_date
     test_config['run_day'] = run_day
-    test_config['model_parameters'].update(train_results)
+    test_config['model_parameters'].update(train_results['model_parameters'])
     test_config['model_parameters']['modes']['predict_mode'] = 'mean_predictions'
     test_config['input_filepath'] = input_filepath
 
@@ -532,6 +533,7 @@ def train_eval_ensemble(region, region_type,
     else:
         test_config['output_filepath'] = name_prefix + '_test1_output.json'
 
+    print("Evaluating M1 model...")
     test_module_config = ModelEvaluatorConfig.parse_obj(test_config)
     eval_results = ModelEvaluator.from_config(test_module_config)
 
@@ -562,6 +564,7 @@ def train_eval_ensemble(region, region_type,
     else:
         final_train_config['output_filepath'] = name_prefix + '_train2_output.json'
 
+    print("Performing M2 fit...")
     final_train_module_config = TrainingModuleConfig.parse_obj(final_train_config)
     final_results = TrainingModule.from_config(final_train_module_config)
 
@@ -611,12 +614,14 @@ def train_eval_plot_ensemble(region, region_type,
     forecast_end_date = (
             datetime.strptime(forecast_start_date, "%m/%d/%y") + timedelta(days=forecast_length)).strftime("%-m/%-d/%y")
 
+    print("Creating plots...")
     create_plots(region, region_type, train1_params, train2_params, train1_run_day, train1_start_date, train1_end_date,
                  test_run_day, test_start_date, test_end_date, train2_run_day, train2_start_date, train2_end_date,
                  forecast_run_day, forecast_start_date, forecast_end_date, default_forecast_config,
-                 data_source=data_source, input_filepath=input_filepath, output_dir=output_dir, debug=False)
+                 data_source=data_source, input_filepath=input_filepath, output_dir=output_dir, debug=True)
    
     if mlflow_log:
+        print("Logging to MLflow...")
         with mlflow.start_run(run_name=mlflow_run_name):
             mlflow.log_params(params)
             mlflow.log_metrics(metrics)
