@@ -155,7 +155,6 @@ class SEIHRD_gen(ModelWrapperBase):
         init_delta =  1. / self.model_parameters['deceased_period']
         init_kappa =  self.model_parameters['recovered_ratio']
         initN = region_metadata.get("population")
-        
 
         datasets = dict()
         initDict = dict()
@@ -176,24 +175,20 @@ class SEIHRD_gen(ModelWrapperBase):
                 
                 """
 
-                
                 latent_days = list(self.model_parameters.get("Latent_{}_ratio".format(latent_variables[0].name)).keys())
-                days = []
-                for day in latent_days:
-                    days.append(datetime.strptime(day, "%m/%d/%y"))
-                temp_run_day = datetime.strftime(max(days), "%-m/%-d/%y")
-                
+                temp_run_day = run_day
+                while (not temp_run_day in latent_days):
+                    temp_run_day = (datetime.strptime(temp_run_day, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
+
                 new_latent_params = self.get_latent_params(region_metadata, region_observations, temp_run_day, run_day,
-                          latent_variables = latent_variables, latent_on = latent_on)['latent_params']
+                          latent_variables=latent_variables, latent_on=latent_on)['latent_params']
                 
                 for latent_key in new_latent_params:
                     self.model_parameters[latent_key].update(new_latent_params[latent_key])
-                                                             
                 
             for var in latent_variables:
                 initDict[var.name] = datasets[latent_on.name][run_day]* self.model_parameters.get('Latent_{}_ratio'.format(var.name)).get(run_day)
-         
-        
+
         for var in self.input_variables():
             initDict[var.name] = datasets[var.name][run_day]
 
@@ -202,13 +197,13 @@ class SEIHRD_gen(ModelWrapperBase):
                                kappa = init_kappa, initN=initN, initI=initDict[oToM['initI']], initE=initDict[oToM['initE']], 
                                initHr=(initDict[oToM['initH']]*init_kappa), initHd = (initDict[oToM['initH']]*(1-init_kappa)),
                                initR=initDict[oToM['initR']], initD=initDict[oToM['initD']])
+
         return estimator
             
         
     def run(self, region_observations: pd.DataFrame, region_metadata, run_day: str, n_days: int, 
             latent_variables: list, latent_on: ForecastVariable):
         estimator = self.get_model_with_params(region_metadata, region_observations, run_day, latent_variables, latent_on)
-        
         estimator.run(T=n_days, verbose=False)
        
     
