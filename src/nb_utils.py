@@ -16,6 +16,7 @@ from modules.forecasting_module import ForecastingModule
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
 from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots
+from utils.data_transformer_helper import loss_json_to_dataframe
 
 
 def parse_params(parameters, interval='Train1'):
@@ -516,6 +517,8 @@ def train_eval_ensemble(region, region_type,
     train_results = TrainingModule.from_config(train_module_config)
 
     train1_model_params['model_parameters'] = train_results['model_parameters']
+    metrics['M1_beta'] = train_results['model_parameters']['beta']
+    metrics_m1_train_losses = loss_json_to_dataframe(train_results['train_metric_results'], 'train1')
 
     test_config = deepcopy(default_test_config)
     test_config['data_source'] = data_source
@@ -536,6 +539,8 @@ def train_eval_ensemble(region, region_type,
     print("Evaluating M1 model...")
     test_module_config = ModelEvaluatorConfig.parse_obj(test_config)
     eval_results = ModelEvaluator.from_config(test_module_config)
+    metrics_m1_test_losses = loss_json_to_dataframe(eval_results, 'test1')
+    metrics['M1_losses'] = pd.concat([metrics_m1_train_losses, metrics_m1_test_losses], axis=0)
 
     testMAPE = 0
     testRMSLE = 0
@@ -570,6 +575,8 @@ def train_eval_ensemble(region, region_type,
 
     model_params['model_parameters'] = final_results['model_parameters']
     train2_model_params['model_parameters'] = final_results['model_parameters']
+    metrics['M2_beta'] = final_results['model_parameters']['beta']
+    metrics['M2_losses'] = loss_json_to_dataframe(final_results['train_metric_results'], 'train2')
 
     return params, metrics, train1_model_params, train2_model_params
 
@@ -636,7 +643,7 @@ def train_eval_plot_ensemble(region, region_type,
                                                                         mlflow_log=mlflow_log,
                                                                         name_prefix=name_prefix)
 
-    print("Creating plots...")
+    print("Creating artifacts...")
     create_plots(region, region_type, train1_params, train2_params, train1_run_day, train1_start_date, train1_end_date,
                  test_run_day, test_start_date, test_end_date, train2_run_day, train2_start_date, train2_end_date,
                  forecast_run_day, forecast_start_date, forecast_end_date, default_forecast_config,
@@ -779,6 +786,7 @@ def create_plots(region, region_type, train1_model_params, train2_model_params,
     # M2 forecast
     df_predictions_forecast_m2 = forecast(train2_model_params, forecast_run_day, forecast_start_date, forecast_end_date,
                                           forecast_config, with_uncertainty=True, include_best_fit=True)
+    df_predictions_forecast_m2.to_csv(os.path.join(output_dir, 'forecast.csv'))
     df_predictions_forecast_m2 = add_init_observations_to_predictions(df_actual, df_predictions_forecast_m2,
                                                                       forecast_run_day)
     df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'])
