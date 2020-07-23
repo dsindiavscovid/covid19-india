@@ -361,8 +361,8 @@ def set_dates(current_day, train_period=7, test_period=7):
     dates = dict()
     
     # Train1
-    train1_start_date = current_day - timedelta(train_period+test_period)
-    train1_end_date = current_day - timedelta(test_period+1)
+    train1_start_date = current_day - timedelta(train_period+test_period-1)
+    train1_end_date = current_day - timedelta(test_period)
     train1_run_day = train1_start_date - timedelta(1)
 
     dates['train1_start_date'] = train1_start_date.strftime("%-m/%-d/%y")
@@ -370,7 +370,7 @@ def set_dates(current_day, train_period=7, test_period=7):
     dates['train1_run_day'] = train1_run_day.strftime("%-m/%-d/%y")
 
     # Train2
-    train2_start_date = current_day - timedelta(train_period)
+    train2_start_date = current_day - timedelta(train_period-1)
     train2_end_date = current_day
     train2_run_day = train2_start_date - timedelta(1)
 
@@ -379,14 +379,13 @@ def set_dates(current_day, train_period=7, test_period=7):
     dates['train2_run_day'] = train2_run_day.strftime("%-m/%-d/%y")
 
     # Test1
-    test_start_date = current_day - timedelta(test_period)
+    test_start_date = current_day - timedelta(test_period-1)
     test_end_date = current_day
     test_run_day = test_start_date - timedelta(1)
 
     dates['test_start_date'] = test_start_date.strftime("%-m/%-d/%y")
     dates['test_end_date'] = test_end_date.strftime("%-m/%-d/%y")
     dates['test_run_day'] = test_run_day.strftime("%-m/%-d/%y")
-    
     return dates
 
 
