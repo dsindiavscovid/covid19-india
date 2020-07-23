@@ -1,3 +1,5 @@
+import yaml
+
 import chevron
 import pandas as pd
 
@@ -15,6 +17,8 @@ def create_report(params, metrics, artifact_list, template_path='template.mustac
     for k, v in template_inputs.items():
         if isinstance(v, pd.DataFrame):
             template_inputs[k] = v.to_markdown()
+        if isinstance(v, dict):
+            template_inputs[k] = yaml.dump(v)
 
     with open(template_path, 'r') as f:
         report = chevron.render(f, template_inputs)
