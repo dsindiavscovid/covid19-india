@@ -23,11 +23,11 @@
         }
 	},
 	"search_space": {
-		"r0": [0.5, 3],
+		"r0": [0.5, 2],
 		"exposed_ratio": [0.001, 10],
 		"active_ratio": [0.001, 2],
 		"infectious_period": [1, 10],
-        "recovery_period" : [1, 15],
+        "recovery_period" : [1, 22],
         "deceased_period" : [1, 15],
         "recovered_ratio" : [0.7, 1],
         "beta": [0, 2]

@@ -103,6 +103,64 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         
         return percentiles_params
     
+    def _flatten_dict(self, oldDict, appendStr = ""):
+        newDict = dict()
+        for key in oldDict.keys():
+            if(type(oldDict[key]) ==  dict):
+                newDict.update(self._flatten_dict(oldDict[key], appendStr+key+"_"))
+            else:
+                if(isinstance(oldDict[key], float) or isinstance(oldDict[key], int)):
+                    newDict[appendStr+key] = oldDict[key]
+        return newDict
+        
+    def _get_statistics_given_indexes(self, list_of_indexes, appendStr):
+        if(len(list_of_indexes)<=0):
+            return pd.DataFrame()
+        list_of_params = dict()
+        for idx in list_of_indexes:
+            list_of_params[idx] = (self._flatten_dict(self.models[idx].model_parameters))
+        
+        keys = list(list_of_params[list_of_indexes[0]].keys())
+        
+        beta = float(self.model_parameters['beta'])
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = deepcopy(self.weights)
+        s = 0
+        for idx in list_of_indexes:
+            s+=weights[idx]
+        for idx in weights.keys():
+            weights[idx] = weights[idx]/s
+        mean = dict()
+        mini = dict()
+        maxi = dict()
+        mean['statName'] = appendStr+"Mean"
+        mini['statName'] = appendStr+"Min"
+        maxi['statName'] = appendStr+"Max"
+        for key in keys:
+            mean[key] = np.sum([list_of_params[idx][key]*weights[idx] for idx in list_of_indexes])
+            mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
+            maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
+            
+        return [mean, mini, maxi]
+
+    
+    def get_statistics_of_params(self, output_file_location = None):
+        sortedLossIndexes =[item[0] for item in sorted(self.losses.items(), key = lambda kv:(kv[1], kv[0]))]
+        
+        statsList = []
+        
+        statsList.extend(self._get_statistics_given_indexes(sortedLossIndexes[:10], "top10_"))
+        statsList.extend(self._get_statistics_given_indexes(sortedLossIndexes[:50], "top50_"))
+        statsList.extend(self._get_statistics_given_indexes(sortedLossIndexes, "all_"))
+        statsDF = pd.DataFrame(columns = list(statsList[0].keys()))
+        for s in statsList:
+            statsDF = statsDF.append(s, ignore_index=True)
+            
+        if output_file_location is not None:
+            statsDF.to_csv(output_file_location)
+        return statsDF
     
     def predict_from_mean_param(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                 end_date: str, **kwargs):
