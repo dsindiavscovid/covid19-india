@@ -101,3 +101,12 @@ def convert_dataframe(region_df):
     transposed_df = pd.DataFrame(region_df.transpose().reset_index().values[1:], columns=headers)
     transposed_df.rename({"observation": "date"}, axis='columns', inplace=True)
     return transposed_df
+
+
+def loss_json_to_dataframe(loss_dict, name):
+    loss_df = pd.DataFrame(index=[name])
+    for loss in loss_dict:
+        if len(loss['variable_weights']) > 1:
+            continue
+        loss_df[loss['variable_weights'][0]['variable'].name] = loss['value']
+    return loss_df
