@@ -129,11 +129,11 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
         else:
             weights = deepcopy(self.weights)
-            
-        s = sum(weights.values())
+        s = 0
+        for idx in list_of_indexes:
+            s+=weights[idx]
         for idx in weights.keys():
             weights[idx] = weights[idx]/s
-            
         mean = dict()
         mini = dict()
         maxi = dict()
@@ -141,7 +141,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         mini['statName'] = appendStr+"Min"
         maxi['statName'] = appendStr+"Max"
         for key in keys:
-            mean[key] = np.sum([list_of_params[idx][key]*weights[idx] for idx in list_of_indexes])/sum(weights.values())
+            mean[key] = np.sum([list_of_params[idx][key]*weights[idx] for idx in list_of_indexes])
             mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
             maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
             
