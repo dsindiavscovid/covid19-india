@@ -2,6 +2,7 @@ import chevron
 import json
 import os
 
+from IPython.display import Markdown, display
 import pandas as pd
 import matplotlib.pyplot as plt
 import mlflow
@@ -85,6 +86,7 @@ class ModelBuildingSession:
         #TODO: Load Athena config params
 
         self.params['data_filepath'] = None
+        self.params['planning_variable'] = 'confirmed'
 
         self.params['train_loss_function_config.C_weight'] = 0.25
         self.params['train_loss_function_config.A_weight'] = 0.25
@@ -208,6 +210,12 @@ class ModelBuildingSession:
         self.train_config['training_loss_function']['variable_weights'][1]['weight'] = a_weight
         self.train_config['training_loss_function']['variable_weights'][2]['weight'] = r_weight
         self.train_config['training_loss_function']['variable_weights'][3]['weight'] = d_weight
+    
+    def render_report(self, path = None):
+        with open('../notebooks/trial_outputs/model_building_report.md') as fh:
+            content = fh.read()
+
+        display(Markdown(content))
 
 
     def build_models_and_generate_forecast(self):
@@ -246,9 +254,13 @@ class ModelBuildingSession:
                          mlflow_log = False, mlflow_run_name = "Testing combined data")
         m1_model_params = train1_params['model_parameters']
         m1_model = ModelFactory.get_model(model_class, m1_model_params)
+        m1_metrics_param_ranges = m1_model.get_statistics_of_params()
         m2_model_params = train2_params['model_parameters']
         m2_model = ModelFactory.get_model(model_class, m2_model_params)
+        m2_metrics_param_ranges = m2_model.get_statistics_of_params()
 
+        metrics['metrics_M1_param_ranges'] = m1_metrics_param_ranges
+        metrics['metrics_M2_param_ranges'] = m2_metrics_param_ranges
 
         # Persist model parameters for generating planning reports
         self.m2_model_params = m2_model_params
@@ -262,45 +274,28 @@ class ModelBuildingSession:
 
         return params, metrics, train1_params, train2_params
     
-    def generate_planning_outputs(self):
-        mandatory_params = self.mandatory_params['generate_planning_outputs']
-        self.validate_params(mandatory_params)
-        # Use scenario configs to generate planning outputs
-        pass
-    
-        #TODO: Check if we can get model params corresponding to a percentile level?
-        #Given the params correponding to the percentile level, enable a multiplier on
-        #r0 to generate a scenario forecast?
+    def generate_planning_plots(self, model_params, planning_variable, 
+                                planning_level, planning_date, 
+                                region_type, region_name, 
+                                data_source, input_filepath, 
+                                train2_start_date, train2_end_date, 
+                                forecast_run_day, forecast_start_date, 
+                                forecast_end_date):
 
-        model_class = self.params['model_class']
-        model_params = self.m2_model_params
-        region_type = self.params['region_type']
-        region_name = self.params['region_name']
-        data_source = self.params['data_source']
-        input_filepath = self.params['data_filepath']
-        train2_start_date = self.time_interval_config['train2_start_date']
-        train2_end_date = self.time_interval_config['train2_end_date']
-        forecast_run_day = self.time_interval_config['test_run_day']
-        forecast_start_date = self.time_interval_config['test_start_date']
-        forecast_end_date = self.time_interval_config['test_end_date']
-        planning_level = self.params['planning_level']
 
-        model = ModelFactory.get_model(model_class, model_params)
-
-        observations = DataFetcherModule.get_observations_for_region(region_type, [region_name], data_source=data_source, filepath=input_filepath)
-        region_metadata = DataFetcherModule.get_regional_metadata(region_type, [region_name], data_source=data_source)
-        percentile_params = model.get_params_for_percentiles(column_of_interest = 'confirmed', 
-                                 date_of_interest = forecast_end_date, 
-                                 tolerance = 1, 
-                                 percentiles = [planning_level], 
-                                 region_metadata = region_metadata, 
-                                 region_observations= observations,
-                                 run_day = forecast_run_day, 
-                                 start_date = forecast_start_date, 
-                                 end_date = forecast_end_date) 
-
-        model_params = percentile_params[planning_level]
-
+        params = dict()
+        metrics = dict()
+        artifacts_dict = dict()
+        r0 = model_params['r0']
+        params['uncertainty_config'] = self.forecast_config['model_parameters']['uncertainty_parameters']
+        params['region_type'] = region_type
+        params['region_name'] = region_name
+        params['forecast_planning_variable'] = planning_variable
+        params['forecast_planning_date'] = planning_date
+        params['scenario_config_R0_multipliers'] = self.params['rt_multiplier_list']
+        metrics['M2_planning_level_model'] = model_params
+        r0_list = [r*r0 for r in self.params['rt_multiplier_list']]
+        metrics['M2_whatif_scenarios_R0'] = r0_list
         with open('../config/sample_forecasting_config.json') as f:
             forecast_config = json.load(f)
 
@@ -317,7 +312,8 @@ class ModelBuildingSession:
         df_smoothed_m2 = get_observations_subset(df_smoothed, plot_start_date_m2, train2_end_date)
 
 
-        for r0_mult in self.params['rt_multiplier_list']:
+        rt_multiplier_list = [1] + self.params['rt_multiplier_list']    
+        for r0_mult in rt_multiplier_list:
             percentile_config = deepcopy(forecast_config)
             forecast_module = ForecastingModuleConfig.parse_obj(percentile_config)
 
@@ -349,6 +345,64 @@ class ModelBuildingSession:
             m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_forecast_m2,
                   train2_start_date, forecast_start_date, column_tags=None, output_dir=planning_outputs,
                   debug=False, plot_name_prefix = str(planning_level) + '_' + str(r0_mult))
+
+        planning_report = os.path.join('../notebooks', output_dir, 'planning_report.md')
+        create_report(params, metrics, artifacts_dict, 
+                      template_path='publishers/planning_template_v1.mustache', 
+                      report_path=planning_report)
+
+        with open('../notebooks/trial_outputs/model_building_report.md') as fh:
+            content = fh.read()
+
+        display(Markdown(content))
+    
+    def generate_planning_outputs(self):
+        mandatory_params = self.mandatory_params['generate_planning_outputs']
+        self.validate_params(mandatory_params)
+        # Use scenario configs to generate planning outputs
+        pass
+    
+        #TODO: Check if we can get model params corresponding to a percentile level?
+        #Given the params correponding to the percentile level, enable a multiplier on
+        #r0 to generate a scenario forecast?
+
+        model_class = self.params['model_class']
+        model_params = self.m2_model_params
+        region_type = self.params['region_type']
+        region_name = self.params['region_name']
+        data_source = self.params['data_source']
+        input_filepath = self.params['data_filepath']
+        train2_start_date = self.time_interval_config['train2_start_date']
+        train2_end_date = self.time_interval_config['train2_end_date']
+        forecast_run_day = self.time_interval_config['forecast_run_day']
+        forecast_start_date = self.time_interval_config['forecast_start_date']
+        forecast_end_date = self.time_interval_config['forecast_end_date']
+        planning_level = self.params['planning_level']
+        planning_date = self.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest']
+
+        model = ModelFactory.get_model(model_class, model_params)
+
+        observations = DataFetcherModule.get_observations_for_region(region_type, [region_name], data_source=data_source, filepath=input_filepath)
+        region_metadata = DataFetcherModule.get_regional_metadata(region_type, [region_name], data_source=data_source)
+        planning_variable = 'confirmed' #self.params['planning_variable']
+        percentile_params = model.get_params_for_percentiles(column_of_interest = planning_variable, 
+                                 date_of_interest = planning_date, 
+                                 tolerance = 1, 
+                                 percentiles = [planning_level], 
+                                 region_metadata = region_metadata, 
+                                 region_observations= observations,
+                                 run_day = forecast_run_day, 
+                                 start_date = forecast_start_date, 
+                                 end_date = forecast_end_date) 
+
+        model_params = percentile_params[planning_level]
+
+        self.generate_planning_plots(model_params, planning_variable, 
+                                     planning_level, planning_date,
+                                     region_type, region_name, 
+                                     data_source, input_filepath, 
+                                     train2_start_date, train2_end_date, 
+                                     forecast_run_day, forecast_start_date, forecast_end_date)
             
         
         return model_params
