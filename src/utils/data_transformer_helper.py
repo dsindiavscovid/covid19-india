@@ -1,3 +1,5 @@
+import collections
+
 import pandas as pd
 
 from entities.forecast_variables import ForecastVariable
@@ -110,3 +112,31 @@ def loss_json_to_dataframe(loss_dict, name):
             continue
         loss_df[loss['variable_weights'][0]['variable'].name] = loss['value']
     return loss_df
+
+
+def flatten(d, parent_key='', sep='_'):
+    items = []
+    for k, v in d.items():
+        new_key = parent_key + sep + k if parent_key else k
+        if isinstance(v, collections.MutableMapping):
+            items.extend(flatten(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+
+def flatten_train_loss_config(config):
+    items = [('metric_name', config['metric_name'])]
+    for variable in config['variable_weights']:
+        items.append((variable['variable']+'_weight', variable['weight']))
+    return dict(items)
+
+
+def flatten_eval_loss_config(config):
+    items = []
+    for loss in config:
+        variable = loss['variable_weights'][0]
+        items.append((variable['variable']+'_metric_name', loss['metric_name']))
+        items.append((variable['variable']+'_weight', variable['weight']))
+    return dict(items)
+
