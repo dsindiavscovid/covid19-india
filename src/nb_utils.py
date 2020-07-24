@@ -622,7 +622,8 @@ def train_eval_plot_ensemble(region, region_type,
     params_dict['region_name'] = " ".join(region)
     params_dict['region_type'] = region_type
     params_dict['data_source'] = data_source
-    params_dict['data_file_path'] = input_filepath if input_filepath is not None else "No path available"
+    params_dict['data_file_path'] = os.path.join('file:///', os.getcwd(), input_filepath) \
+        if input_filepath is not None else "No path available"
     params_dict['search_parameters'] = default_train_config['search_parameters']
     params_dict['param_search_space_config'] = default_train_config['search_space']
     params_dict['train_loss_function_config'] = default_train_config['training_loss_function']
