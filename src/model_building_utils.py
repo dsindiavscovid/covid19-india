@@ -22,10 +22,16 @@ from modules.training_module import TrainingModule
 from publishers.mlflow_logging import get_previous_runs
 from publishers.report_generation import create_report
 
+from model_wrappers.model_factory import ModelFactory
+
 import matplotlib.dates as mdates
 
+from nb_utils import add_init_observations_to_predictions
+from nb_utils import get_observations_subset
 from nb_utils import plot_data
 from nb_utils import train_eval_plot_ensemble
+
+from utils.plotting import m2_forecast_plots
 
 class ModelBuildingSession:
     def __init__(self, sess_name):
@@ -98,7 +104,8 @@ class ModelBuildingSession:
     
     def print_parameters(self):
         for param in self.params:
-            print(f'{param} : {self.params[param]}')
+            #print(f'{param} : {self.params[param]}')
+            pass
     
     def validate_params(self, param_list):
         """
@@ -165,7 +172,7 @@ class ModelBuildingSession:
             plot_fname = self.params['case_cnt_plot_file_name']
         else:
             plot_fname = 'case_cnt_plot.png'
-            self.params['case_cnt_plot_file_name'] = plot_name
+            self.params['case_cnt_plot_file_name'] = plot_fname
 
         if 'case_cnt_csv_file_name' in self.params:
             csv_fname = self.params['case_cnt_csv_file_name']
@@ -216,6 +223,7 @@ class ModelBuildingSession:
         self.param_search_config = self.train_config['search_space']
         self.train_loss_config = self.train_config['training_loss_function']
         self.eval_loss_config = self.train_config['loss_functions']
+        model_class = self.params['model_class']
 
 
         current_day = datetime.now().date() - timedelta(25)
@@ -236,7 +244,16 @@ class ModelBuildingSession:
                          input_filepath = self.params['data_filepath'],
                          output_dir = output_dir,
                          mlflow_log = False, mlflow_run_name = "Testing combined data")
-        self.model_params = train2_params['model_parameters']
+        m1_model_params = train1_params['model_parameters']
+        m1_model = ModelFactory.get_model(model_class, m1_model_params)
+        m2_model_params = train2_params['model_parameters']
+        m2_model = ModelFactory.get_model(model_class, m2_model_params)
+
+
+        # Persist model parameters for generating planning reports
+        self.m2_model_params = m2_model_params
+
+        self.time_interval_config = params['time_interval_config']
 
         model_building_report = os.path.join(output_dir, 'model_building_report.md')
         create_report(params, metrics, artifacts_dict, 
@@ -256,29 +273,34 @@ class ModelBuildingSession:
         #r0 to generate a scenario forecast?
 
         model_class = self.params['model_class']
-        model_params = self.model_params
+        model_params = self.m2_model_params
         region_type = self.params['region_type']
         region_name = self.params['region_name']
         data_source = self.params['data_source']
-        filepath = self.params['data_filepath']
+        input_filepath = self.params['data_filepath']
+        train2_start_date = self.time_interval_config['train2_start_date']
+        train2_end_date = self.time_interval_config['train2_end_date']
         forecast_run_day = self.time_interval_config['test_run_day']
         forecast_start_date = self.time_interval_config['test_start_date']
         forecast_end_date = self.time_interval_config['test_end_date']
+        planning_level = self.params['planning_level']
 
-        training_module = TrainingModule(model_class, model_params)
-        model = training_module._model
-        forecast_config = deepcopy(self.forecast_config)
-        observations = DataFetcherModule.get_observations_for_region(region_type, [region_name], data_source=data_source, filepath=filepath)
+        model = ModelFactory.get_model(model_class, model_params)
+
+        observations = DataFetcherModule.get_observations_for_region(region_type, [region_name], data_source=data_source, filepath=input_filepath)
         region_metadata = DataFetcherModule.get_regional_metadata(region_type, [region_name], data_source=data_source)
-        params = model.get_params_for_percentiles(column_of_interest = 'confirmed', 
+        percentile_params = model.get_params_for_percentiles(column_of_interest = 'confirmed', 
                                  date_of_interest = forecast_end_date, 
                                  tolerance = 1, 
-                                 percentiles = [80, 90], 
+                                 percentiles = [planning_level], 
                                  region_metadata = region_metadata, 
                                  region_observations= observations,
                                  run_day = forecast_run_day, 
                                  start_date = forecast_start_date, 
                                  end_date = forecast_end_date) 
+
+        model_params = percentile_params[planning_level]
+
         with open('../config/sample_forecasting_config.json') as f:
             forecast_config = json.load(f)
 
@@ -295,52 +317,41 @@ class ModelBuildingSession:
         df_smoothed_m2 = get_observations_subset(df_smoothed, plot_start_date_m2, train2_end_date)
 
 
-        for percentile in params:
-            for r0_mult in self.params(['rt_multiplier_list']):
-                percentile_config = deepcopy(forecast_config)
-                forecast_module = ForecastingModuleConfig.parse_obj(percentile_config)
+        for r0_mult in self.params['rt_multiplier_list']:
+            percentile_config = deepcopy(forecast_config)
+            forecast_module = ForecastingModuleConfig.parse_obj(percentile_config)
 
-                # Fetch the model parameters and update it using the 
-                # multiplication factor
-                model_params = params[percentile]
-                model_params['r0'] = model_params['r0'] * r0_mult
-                forecast_module.model_parameters = params[percentile]
+            # Fetch the model parameters and update it using the 
+            # multiplication factor
+            model_params['r0'] = model_params['r0'] * r0_mult
+            forecast_module.model_parameters = model_params
 
-                forecast_module.data_source = self.params['data_source']
-                forecast_module.input_filepath = self.params['data_filepath']
-                forecast_module.model_class = 'SEIHRD_gen'
-                forecast_module.run_day = forecast_run_day
-                forecast_module.forecast_start_date = forecast_start_date
-                forecast_module.forecast_end_date = forecast_end_date
+            forecast_module.data_source = self.params['data_source']
+            forecast_module.input_filepath = self.params['data_filepath']
+            forecast_module.model_class = 'SEIHRD_gen'
+            forecast_module.run_day = forecast_run_day
+            forecast_module.forecast_start_date = forecast_start_date
+            forecast_module.forecast_end_date = forecast_end_date
     
-                forecasting_output = ForecastingModule.from_config(forecasting_module)
-                output_dir = self.params['output_dir']
-                artifact_name = 'forecast_' + str(percentile) + '_' + str(r0_mult) + '.csv'
-                artifact_path = os.path.join('../notebooks', output_dir, artifact_name)
-                forecasting_output.to_csv(artifact_path, index=False)
+            forecasting_output = ForecastingModule.from_config(forecast_module)
+            output_dir = self.params['output_dir']
+            artifact_name = 'forecast_' + str(planning_level) + '_' + str(r0_mult) + '.csv'
+            artifact_path = os.path.join('../notebooks', output_dir, artifact_name)
+            forecasting_output.to_csv(artifact_path, index=False)
 
-                df_predictions_forecast_m2 = add_init_observations_to_predictions(df_actual, forecasting_output,
-                                                                      forecast_run_day)
-                df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'])
+            df_predictions_forecast_m2 = add_init_observations_to_predictions(df_actual, forecasting_output,
+                                                                  forecast_run_day)
+            df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'])
 
-                # Get percentiles to be plotted
-                uncertainty_params = forecast_config['model_parameters']['uncertainty_parameters']
-                confidence_intervals = []
-                for c in uncertainty_params['ci']:
-                    confidence_intervals.extend([50 - c / 2, 50 + c / 2])
-                percentiles = list(set(uncertainty_params['percentiles'] + confidence_intervals))
-                column_tags = [str(i) for i in percentiles]
-                column_tags.extend(['mean', 'best'])
-                column_of_interest = uncertainty_params['column_of_interest']
-                
-
-
-                m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_forecast_m2,
-                      train2_start_date, forecast_start_date, column_tags=column_tags, output_dir=output_dir,
-                      debug=False)
+            planning_outputs = os.path.join('../notebooks', output_dir, 'planning_outputs')
+            if not os.path.exists(planning_outputs):
+                os.mkdir(planning_outputs)
+            m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_forecast_m2,
+                  train2_start_date, forecast_start_date, column_tags=None, output_dir=planning_outputs,
+                  debug=False, plot_name_prefix = str(planning_level) + '_' + str(r0_mult))
             
         
-        return params 
+        return model_params
     
     def list_outputs(self):
         mandatory_params = self.mandatory_params['list_outputs']
