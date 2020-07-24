@@ -662,8 +662,28 @@ def train_eval_plot_ensemble(region, region_type,
             mlflow.log_artifact('train1_output.json')
             mlflow.log_artifact('test1_output.json')
             mlflow.log_artifact('train2_output.json')
+    
+    artifacts_dict = {
+        'plot_M1_CARD': os.path.join(output_dir,'m1.png'),
+        'plot_M1_single_C': os.path.join(output_dir,'m1_confirmed.png'),
+        'plot_M1_single_A': os.path.join(output_dir,'m1_hospitalized.png'),
+        'plot_M1_single_R': os.path.join(output_dir,'m1_recovered.png'),
+        'plot_M1_single_D': os.path.join(output_dir,'m1_deceased.png'),
+        'plot_M2_CARD': os.path.join(output_dir,'m2.png'),
+        'plot_M2_single_C': os.path.join(output_dir,'m2_confirmed.png'),
+        'plot_M2_single_A': os.path.join(output_dir,'m2_hospitalized.png'),
+        'plot_M2_single_R': os.path.join(output_dir,'m2_recovered.png'),
+        'plot_M2_single_D': os.path.join(output_dir,'m2_deceased.png'),
+        'plot_M2_forecast_CARD': os.path.join(output_dir,'m2_forecast.png'),
+        'plot_M2_forecast_single_C': os.path.join(output_dir,'m2_forecast_confirmed.png'),
+        'plot_M2_forecast_single_A': os.path.join(output_dir,'m2_forecast_hospitalized.png'),
+        'plot_M2_forecast_single_R': os.path.join(output_dir,'m2_forecast_recovered.png'),
+        'plot_M2_forecast_single_D': os.path.join(output_dir,'m2_forecast_deceased.png'),
+        'plot_planning_pdf_cdf': os.path.join(output_dir,'m2_distribution.png'),
+        'output_forecast_file': os.path.join('file:///', output_dir,'forecast.csv')
+    }
 
-    return params_dict, metrics, train1_params, train2_params
+    return params_dict, metrics, artifacts_dict, train1_params, train2_params
 
 
 def add_init_observations_to_predictions(df_actual, df_predictions, run_day):

@@ -1,6 +1,8 @@
+import chevron
 import json
 import os
 
+from IPython.display import Markdown, display
 import pandas as pd
 import matplotlib.pyplot as plt
 import mlflow
@@ -10,6 +12,8 @@ from datetime import datetime, timedelta
 
 from configs.base_config import TrainingModuleConfig
 from configs.base_config import ModelEvaluatorConfig
+from configs.base_config import ForecastingModuleConfig
+from modules.forecasting_module import ForecastingModule
 
 from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
@@ -17,16 +21,24 @@ from configs.base_config import ForecastingModuleConfig
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
 from publishers.mlflow_logging import get_previous_runs
+from publishers.report_generation import create_report
+
+from model_wrappers.model_factory import ModelFactory
 
 import matplotlib.dates as mdates
 
+from nb_utils import add_init_observations_to_predictions
+from nb_utils import get_observations_subset
 from nb_utils import plot_data
 from nb_utils import train_eval_plot_ensemble
+
+from utils.plotting import m2_forecast_plots
 
 class ModelBuildingSession:
     def __init__(self, sess_name):
         self.sess_name = sess_name
         self.params = dict()
+        self.model_params = None #Placeholder for trained model parameters
         self.load_default_configs()
         self.init_mandatory_params()
         self.init_config_params()
@@ -42,6 +54,11 @@ class ModelBuildingSession:
             self.train_config = json.load(f_train)
             self.test_config = json.load(f_test)
             self.forecast_config = json.load(f_forecast)
+
+        self.time_interval_config = None
+        self.param_search_config = None
+        self.train_loss_config = None
+        self.eval_loss_config = None
     
     def init_mlflow_athena_config(self):
         with open('/Users/shreyas.shetty/mlflow_config.json') as f_mlflow:
@@ -69,6 +86,7 @@ class ModelBuildingSession:
         #TODO: Load Athena config params
 
         self.params['data_filepath'] = None
+        self.params['planning_variable'] = 'confirmed'
 
         self.params['train_loss_function_config.C_weight'] = 0.25
         self.params['train_loss_function_config.A_weight'] = 0.25
@@ -88,7 +106,8 @@ class ModelBuildingSession:
     
     def print_parameters(self):
         for param in self.params:
-            print(f'{param} : {self.params[param]}')
+            #print(f'{param} : {self.params[param]}')
+            pass
     
     def validate_params(self, param_list):
         """
@@ -155,7 +174,7 @@ class ModelBuildingSession:
             plot_fname = self.params['case_cnt_plot_file_name']
         else:
             plot_fname = 'case_cnt_plot.png'
-            self.params['case_cnt_plot_file_name'] = plot_name
+            self.params['case_cnt_plot_file_name'] = plot_fname
 
         if 'case_cnt_csv_file_name' in self.params:
             csv_fname = self.params['case_cnt_csv_file_name']
@@ -191,8 +210,14 @@ class ModelBuildingSession:
         self.train_config['training_loss_function']['variable_weights'][1]['weight'] = a_weight
         self.train_config['training_loss_function']['variable_weights'][2]['weight'] = r_weight
         self.train_config['training_loss_function']['variable_weights'][3]['weight'] = d_weight
-
     
+    def render_report(self, path = None):
+        with open('../notebooks/trial_outputs/model_building_report.md') as fh:
+            content = fh.read()
+
+        display(Markdown(content))
+
+
     def build_models_and_generate_forecast(self):
         mandatory_params = self.mandatory_params['build_models_and_generate_forecast']
         self.validate_params(mandatory_params)
@@ -203,8 +228,13 @@ class ModelBuildingSession:
         # train_eval_forecast() # equivalent from nb_utils
 
         self.setup_defaults()
+        self.param_search_config = self.train_config['search_space']
+        self.train_loss_config = self.train_config['training_loss_function']
+        self.eval_loss_config = self.train_config['loss_functions']
+        model_class = self.params['model_class']
 
-        current_day = datetime.now().date() 
+
+        current_day = datetime.now().date() - timedelta(25)
         forecast_length = 30
         
         #TODO check the date_of_interest parameter
@@ -212,15 +242,119 @@ class ModelBuildingSession:
 
 
         name_prefix = self.params['region_name']
+        output_dir = os.path.join('../notebooks', self.params['output_dir'])
         
-        train_eval_plot_ensemble([self.params['region_name']], self.params['region_type'],
+        params, metrics, artifacts_dict, train1_params, train2_params = train_eval_plot_ensemble([self.params['region_name']], self.params['region_type'],
                          current_day, forecast_length,
                          self.train_config, self.test_config, self.forecast_config,
                          train_period = 14, test_period = 7,
                          max_evals = 1000, data_source = self.params['data_source'],
                          input_filepath = self.params['data_filepath'],
+                         output_dir = output_dir,
                          mlflow_log = False, mlflow_run_name = "Testing combined data")
-        #return params, metrics
+        m1_model_params = train1_params['model_parameters']
+        m1_model = ModelFactory.get_model(model_class, m1_model_params)
+        m1_metrics_param_ranges = m1_model.get_statistics_of_params()
+        m2_model_params = train2_params['model_parameters']
+        m2_model = ModelFactory.get_model(model_class, m2_model_params)
+        m2_metrics_param_ranges = m2_model.get_statistics_of_params()
+
+        metrics['metrics_M1_param_ranges'] = m1_metrics_param_ranges
+        metrics['metrics_M2_param_ranges'] = m2_metrics_param_ranges
+
+        # Persist model parameters for generating planning reports
+        self.m2_model_params = m2_model_params
+
+        self.time_interval_config = params['time_interval_config']
+
+        model_building_report = os.path.join(output_dir, 'model_building_report.md')
+        create_report(params, metrics, artifacts_dict, 
+                      template_path='publishers/template_v1.mustache', 
+                      report_path=model_building_report)
+
+        return params, metrics, train1_params, train2_params
+    
+    def generate_planning_plots(self, model_params, planning_variable, 
+                                planning_level, planning_date, 
+                                region_type, region_name, 
+                                data_source, input_filepath, 
+                                train2_start_date, train2_end_date, 
+                                forecast_run_day, forecast_start_date, 
+                                forecast_end_date):
+
+
+        params = dict()
+        metrics = dict()
+        artifacts_dict = dict()
+        r0 = model_params['r0']
+        params['uncertainty_config'] = self.forecast_config['model_parameters']['uncertainty_parameters']
+        params['region_type'] = region_type
+        params['region_name'] = region_name
+        params['forecast_planning_variable'] = planning_variable
+        params['forecast_planning_date'] = planning_date
+        params['scenario_config_R0_multipliers'] = self.params['rt_multiplier_list']
+        metrics['M2_planning_level_model'] = model_params
+        r0_list = [r*r0 for r in self.params['rt_multiplier_list']]
+        metrics['M2_whatif_scenarios_R0'] = r0_list
+        with open('../config/sample_forecasting_config.json') as f:
+            forecast_config = json.load(f)
+
+
+        # Get actual and smoothed observations
+        df_actual = DataFetcherModule.get_observations_for_region(region_type, [region_name], 
+                                                                  data_source=data_source, 
+                                                                  smooth=False, filepath=input_filepath)
+        df_smoothed = DataFetcherModule.get_observations_for_region(region_type, [region_name], 
+                                                                    data_source=data_source, smooth=True, 
+                                                                    filepath=input_filepath)
+        plot_start_date_m2 = (datetime.strptime(train2_start_date, "%m/%d/%y") - timedelta(days=7)).strftime("%-m/%-d/%y")
+        df_actual_m2 = get_observations_subset(df_actual, plot_start_date_m2, train2_end_date)
+        df_smoothed_m2 = get_observations_subset(df_smoothed, plot_start_date_m2, train2_end_date)
+
+
+        rt_multiplier_list = [1] + self.params['rt_multiplier_list']    
+        for r0_mult in rt_multiplier_list:
+            percentile_config = deepcopy(forecast_config)
+            forecast_module = ForecastingModuleConfig.parse_obj(percentile_config)
+
+            # Fetch the model parameters and update it using the 
+            # multiplication factor
+            model_params['r0'] = model_params['r0'] * r0_mult
+            forecast_module.model_parameters = model_params
+
+            forecast_module.data_source = self.params['data_source']
+            forecast_module.input_filepath = self.params['data_filepath']
+            forecast_module.model_class = 'SEIHRD_gen'
+            forecast_module.run_day = forecast_run_day
+            forecast_module.forecast_start_date = forecast_start_date
+            forecast_module.forecast_end_date = forecast_end_date
+    
+            forecasting_output = ForecastingModule.from_config(forecast_module)
+            output_dir = self.params['output_dir']
+            artifact_name = 'forecast_' + str(planning_level) + '_' + str(r0_mult) + '.csv'
+            artifact_path = os.path.join('../notebooks', output_dir, artifact_name)
+            forecasting_output.to_csv(artifact_path, index=False)
+
+            df_predictions_forecast_m2 = add_init_observations_to_predictions(df_actual, forecasting_output,
+                                                                  forecast_run_day)
+            df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'])
+
+            planning_outputs = os.path.join('../notebooks', output_dir, 'planning_outputs')
+            if not os.path.exists(planning_outputs):
+                os.mkdir(planning_outputs)
+            m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_forecast_m2,
+                  train2_start_date, forecast_start_date, column_tags=None, output_dir=planning_outputs,
+                  debug=False, plot_name_prefix = str(planning_level) + '_' + str(r0_mult))
+
+        planning_report = os.path.join('../notebooks', output_dir, 'planning_report.md')
+        create_report(params, metrics, artifacts_dict, 
+                      template_path='publishers/planning_template_v1.mustache', 
+                      report_path=planning_report)
+
+        with open('../notebooks/trial_outputs/model_building_report.md') as fh:
+            content = fh.read()
+
+        display(Markdown(content))
     
     def generate_planning_outputs(self):
         mandatory_params = self.mandatory_params['generate_planning_outputs']
@@ -231,6 +365,47 @@ class ModelBuildingSession:
         #TODO: Check if we can get model params corresponding to a percentile level?
         #Given the params correponding to the percentile level, enable a multiplier on
         #r0 to generate a scenario forecast?
+
+        model_class = self.params['model_class']
+        model_params = self.m2_model_params
+        region_type = self.params['region_type']
+        region_name = self.params['region_name']
+        data_source = self.params['data_source']
+        input_filepath = self.params['data_filepath']
+        train2_start_date = self.time_interval_config['train2_start_date']
+        train2_end_date = self.time_interval_config['train2_end_date']
+        forecast_run_day = self.time_interval_config['forecast_run_day']
+        forecast_start_date = self.time_interval_config['forecast_start_date']
+        forecast_end_date = self.time_interval_config['forecast_end_date']
+        planning_level = self.params['planning_level']
+        planning_date = self.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest']
+
+        model = ModelFactory.get_model(model_class, model_params)
+
+        observations = DataFetcherModule.get_observations_for_region(region_type, [region_name], data_source=data_source, filepath=input_filepath)
+        region_metadata = DataFetcherModule.get_regional_metadata(region_type, [region_name], data_source=data_source)
+        planning_variable = 'confirmed' #self.params['planning_variable']
+        percentile_params = model.get_params_for_percentiles(column_of_interest = planning_variable, 
+                                 date_of_interest = planning_date, 
+                                 tolerance = 1, 
+                                 percentiles = [planning_level], 
+                                 region_metadata = region_metadata, 
+                                 region_observations= observations,
+                                 run_day = forecast_run_day, 
+                                 start_date = forecast_start_date, 
+                                 end_date = forecast_end_date) 
+
+        model_params = percentile_params[planning_level]
+
+        self.generate_planning_plots(model_params, planning_variable, 
+                                     planning_level, planning_date,
+                                     region_type, region_name, 
+                                     data_source, input_filepath, 
+                                     train2_start_date, train2_end_date, 
+                                     forecast_run_day, forecast_start_date, forecast_end_date)
+            
+        
+        return model_params
     
     def list_outputs(self):
         mandatory_params = self.mandatory_params['list_outputs']

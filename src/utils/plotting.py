@@ -367,7 +367,7 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
 
 def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_forecast,
                       train2_start_date, forecast_start_date, column_tags=None, variables=None, output_dir='',
-                      debug=False):
+                      debug=False, plot_name_prefix = None):
     """Creates all M2 forecast plots
 
     Args:
@@ -396,20 +396,29 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
     ]
 
     # Multivariate plot with M1 mean predictions
-    path = os.path.join(output_dir, 'm2_forecast.png')
+    if plot_name_prefix is not None:
+        title = f'{region_name}: {plot_name_prefix} M2 forecast'
+        path = os.path.join(output_dir, f'{plot_name_prefix}_m2_forecast.png')
+    else:
+        title = f'{region_name}: M2 forecast'
+        path = os.path.join(output_dir, 'm2_forecast.png')
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
                                  df_predictions_test=df_predictions_forecast,
                                  variables=variables, column_label='mean', column_tag='mean',
-                                 vertical_lines=vertical_lines, title=f'{region_name}: M2 forecast', path=path)
+                                 vertical_lines=vertical_lines, title=title, path=path)
 
     # Single variable plot
     for variable in variables:
-        file = f'm2_forecast_{variable}.png'
-        path = os.path.join(output_dir, file)
+        if plot_name_prefix is not None:
+            title = f'{region_name}: {plot_name_prefix} M2 forecast - {variable}'
+            path = os.path.join(output_dir, f'{plot_name_prefix}_m2_forecast.png')
+        else:
+            title = f'{region_name}: M2 forecast - {variable}'
+            path = os.path.join(output_dir, 'm2_forecast.png')
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_test=df_predictions_forecast, column_tags=column_tags,
                                         vertical_lines=vertical_lines,
-                                        title=f'{region_name}: M2 forecast - {variable}', path=path, debug=debug)
+                                        title=title, path=path, debug=debug)
 
 
 def distribution_plots(trials, variable, output_dir=''):
