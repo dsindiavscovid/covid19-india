@@ -293,7 +293,11 @@ class ModelBuildingSession:
         params['forecast_planning_variable'] = planning_variable
         params['forecast_planning_date'] = planning_date
         params['scenario_config_R0_multipliers'] = self.params['rt_multiplier_list']
+        #TODO: Check if the latent_information key is causing toruble:w
         metrics['M2_planning_level_model'] = model_params
+        print(model_params)
+        print('uncertainty config')
+        print(params['uncertainty_config'])
         r0_list = [r*r0 for r in self.params['rt_multiplier_list']]
         metrics['M2_whatif_scenarios_R0'] = r0_list
         with open('../config/sample_forecasting_config.json') as f:
@@ -346,15 +350,22 @@ class ModelBuildingSession:
                   train2_start_date, forecast_start_date, column_tags=None, output_dir=planning_outputs,
                   debug=False, plot_name_prefix = str(planning_level) + '_' + str(r0_mult))
 
+		
+	    artifacts_dict = {
+	        'plot_M2_planning_CARD': os.path.join(planning_outputs,'m2_planning.png'),
+	        'plot_M2_planning_ensemble_single_C': os.path.join(planning_outputs,'m2_planning_confirmed.png'),
+	        'plot_M2_planning_ensemble_single_A': os.path.join(planning_outputs,'m2_planning_hospitalized.png'),
+	        'plot_M2_planning_ensemble_single_R': os.path.join(planning_outputs,'m2_planning_recovered.png'),
+	        'plot_M2_planning_ensemble_single_D': os.path.join(planning_outputs,'m2_planning_deceased.png'),
+	        'plot_M2_scenario_1_forecast_CARD': os.path.join(planning_outputs,'m2_scenario_1_forecast.png'),
+	        'plot_M2_scenario_2_forecast_CARD': os.path.join(planning_outputs,'m2_scenario_2_forecast.png'),
+	        'plot_M2_scenario_3_forecast_CARD': os.path.join(planning_outputs,'m2_scenario_3_forecast.png'),
+	    }
         planning_report = os.path.join('../notebooks', output_dir, 'planning_report.md')
         create_report(params, metrics, artifacts_dict, 
                       template_path='publishers/planning_template_v1.mustache', 
                       report_path=planning_report)
 
-        with open('../notebooks/trial_outputs/model_building_report.md') as fh:
-            content = fh.read()
-
-        display(Markdown(content))
     
     def generate_planning_outputs(self):
         mandatory_params = self.mandatory_params['generate_planning_outputs']
@@ -395,6 +406,7 @@ class ModelBuildingSession:
                                  start_date = forecast_start_date, 
                                  end_date = forecast_end_date) 
 
+		#TODO: rename model_params to planning_model
         model_params = percentile_params[planning_level]
 
         self.generate_planning_plots(model_params, planning_variable, 
