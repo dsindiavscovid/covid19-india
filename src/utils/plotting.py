@@ -114,7 +114,7 @@ def multivariate_case_count_plot(df_actual, df_smoothed=None, df_predictions_tra
                 column = '_'.join([variable, column_tag])
                 if column in df_predictions.columns:
                     plt.plot(df_predictions['date'], df_predictions[column], '--',
-                             color=plot_colors[variable], label=f'{column_label}: {plot_labels[variable]}')
+                             color=plot_colors[variable], label=f'Predicted {column_label}: {plot_labels[variable]}')
 
     # Plot vertical lines to mark specific events
     plot_vertical_lines(ax, vertical_lines)
