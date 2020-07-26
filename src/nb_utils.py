@@ -679,7 +679,7 @@ def train_eval_plot_ensemble(region, region_type,
         'plot_M2_forecast_single_R': os.path.join(output_dir, 'm2_forecast_recovered.png'),
         'plot_M2_forecast_single_D': os.path.join(output_dir, 'm2_forecast_deceased.png'),
         'plot_planning_pdf_cdf': os.path.join(output_dir, 'm2_distribution.png'),
-        'output_forecast_file': os.path.join('file:///', output_dir, 'forecast.csv')
+        'output_forecast_file': os.path.join(output_dir, 'forecast.csv')
     }
 
     return params_dict, metrics, artifacts_dict, train1_params, train2_params

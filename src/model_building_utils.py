@@ -1,41 +1,29 @@
-import chevron
+import json
 import json
 import os
-
-from IPython.display import Markdown, display
-import pandas as pd
-import matplotlib.pyplot as plt
-import mlflow
-
 from copy import deepcopy
 from datetime import datetime, timedelta
 
-from configs.base_config import TrainingModuleConfig
-from configs.base_config import ModelEvaluatorConfig
+import matplotlib.pyplot as plt
+import mlflow
+import pandas as pd
+from IPython.display import Markdown, display
 from configs.base_config import ForecastingModuleConfig
-from modules.forecasting_module import ForecastingModule
-
+from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
-from configs.base_config import ForecastingModuleConfig
-from modules.model_evaluator import ModelEvaluator
-from modules.training_module import TrainingModule
-from publishers.mlflow_logging import get_previous_runs
-from publishers.report_generation import create_report
-
-from model_wrappers.model_factory import ModelFactory
-
-import matplotlib.dates as mdates
-
 from nb_utils import add_init_observations_to_predictions
 from nb_utils import get_observations_subset
 from nb_utils import plot_data
 from nb_utils import train_eval_plot_ensemble
-
+from publishers.mlflow_logging import get_previous_runs, log_to_mlflow
+from publishers.report_generation import create_report
+from utils.data_transformer_helper import flatten_train_loss_config, flatten_eval_loss_config, flatten
 from utils.plotting import m2_forecast_plots
 from utils.staffing import get_clean_staffing_ratio, compute_staffing_matrix
 
-def create_session(session_name, user_name='guest'):  
+
+def create_session(session_name, user_name='guest'):
     if session_name is None:
         current_date = datetime.now().date().strftime('%-m/%-d/%y')
         session_name = user_name + current_date
@@ -53,11 +41,13 @@ def create_session(session_name, user_name='guest'):
     current_session = ModelBuildingSession(session_name)
     current_session.set_param('output_dir', dir_name)
     current_session.set_param('experiment_name', 'SEIHRD_ENSEMBLE_V0')
+    current_session.set_param('run_name', 'run_name') # FIXME
     current_session.set_param('model_class', 'homogeneous_ensemble')
     current_session.print_parameters()
     #TOFIX
     current_session.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest'] = '7/5/20'
     return current_session
+
 
 class ModelBuildingSession:
     def __init__(self, sess_name):
@@ -68,7 +58,10 @@ class ModelBuildingSession:
         self.init_mandatory_params()
         self.init_config_params()
         self.init_mlflow_athena_config()
-        
+        self.params_to_log = dict()
+        self.metrics_to_log = dict()
+        self.artifacts_dict = dict()
+
     def load_default_configs(self):
         """
         Read from config files?
@@ -281,7 +274,7 @@ class ModelBuildingSession:
                          max_evals = 1000, data_source = self.params['data_source'],
                          input_filepath = self.params['data_filepath'],
                          output_dir = output_dir,
-                         mlflow_log = False, mlflow_run_name = "Testing combined data")
+                         mlflow_log = False, mlflow_run_name = self.params['run_name'])
         m1_model_params = train1_params['model_parameters']
         m1_model = ModelFactory.get_model(model_class, m1_model_params)
         m1_metrics_param_ranges = m1_model.get_statistics_of_params()
@@ -301,6 +294,10 @@ class ModelBuildingSession:
         create_report(params, metrics, artifacts_dict, 
                       template_path='publishers/template_v1.mustache', 
                       report_path=model_building_report)
+
+        self.params_to_log.update(params)
+        self.metrics_to_log.update(metrics)
+        self.artifacts_dict.update(artifacts_dict)
 
         return params, metrics, train1_params, train2_params
     
@@ -404,6 +401,8 @@ class ModelBuildingSession:
             'list_planning_output_forecast_file' : os.path.join(planning_outputs, f'{planning_level}_forecast.csv')
         }
 
+        # self.artifacts_dict.update(artifacts_dict)
+
         planning_report = os.path.join('../notebooks', output_dir, 'planning_report.md')
         create_report(params, metrics, artifacts_dict, 
                       template_path='publishers/planning_template_v1.mustache', 
@@ -460,8 +459,7 @@ class ModelBuildingSession:
                                                               data_source, input_filepath, 
                                                               train2_start_date, train2_end_date, 
                                                               forecast_run_day, forecast_start_date, forecast_end_date)
-            
-        
+
         return planning_artifact_list
     
     def list_outputs(self):
@@ -475,4 +473,26 @@ class ModelBuildingSession:
     def log_session(self):
         mandatory_params = self.mandatory_params['log_session']
         self.validate_params(mandatory_params)
-        pass
+
+        try:
+            self.params_to_log['train_loss_function_config'] = \
+                flatten_train_loss_config(self.params_to_log['train_loss_function_config'])
+        except KeyError:
+            pass
+        try:
+            self.params_to_log['eval_loss_function_config'] = \
+                flatten_eval_loss_config(self.params_to_log['eval_loss_function_config'])
+        except KeyError:
+            pass
+        self.params_to_log = flatten(self.params_to_log)
+        self.metrics_to_log = flatten(self.metrics_to_log)
+
+        remove_keys = []
+        for key, value in self.metrics_to_log.items():
+            if isinstance(value, pd.DataFrame):  # TODO: Check for numeric type
+                remove_keys.append(key)
+
+        [self.metrics_to_log.pop(key) for key in remove_keys]
+
+        log_to_mlflow(self.params_to_log, self.metrics_to_log, self.artifacts_dict,
+                      experiment_name=self.params['experiment_name'], run_name=self.params['run_name'])
