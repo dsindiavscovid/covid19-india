@@ -367,7 +367,7 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
 
 def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_forecast,
                       train2_start_date, forecast_start_date, column_tags=None, variables=None, output_dir='',
-                      debug=False, plot_name_prefix = None):
+                      debug=False, plot_name_prefix=None):
     """Creates all M2 forecast plots
 
     Args:
@@ -381,6 +381,7 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
         variables (list, optional): list of variables to plot (default: None)
         output_dir (str, optional): output directory path (default: '')
         debug (bool, optional): if True, include additional plotting (uncertainty during training)
+        plot_name_prefix (str, optional): prefix for plot name
 
     """
 
@@ -414,7 +415,7 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
             path = os.path.join(output_dir, f'{plot_name_prefix}_m2_forecast.png')
         else:
             title = f'{region_name}: M2 forecast - {variable}'
-            path = os.path.join(output_dir, 'm2_forecast.png')
+            path = os.path.join(output_dir, f'm2_forecast_{variable}.png')
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_test=df_predictions_forecast, column_tags=column_tags,
                                         vertical_lines=vertical_lines,
