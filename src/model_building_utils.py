@@ -33,6 +33,31 @@ from nb_utils import plot_data
 from nb_utils import train_eval_plot_ensemble
 
 from utils.plotting import m2_forecast_plots
+from utils.staffing import get_clean_staffing_ratio, compute_staffing_matrix
+
+def create_session(session_name, user_name='guest'):  
+    if session_name is None:
+        current_date = datetime.now().date().strftime('%-m/%-d/%y')
+        session_name = user_name + current_date
+    # Directory to store the outptus from the current session
+    dir_name = session_name + '_outputs'
+    # Check if the directory exists
+    # if yes, raise a warning; else create a new directory
+    path_prefix = '../notebooks'
+    output_dir = os.path.join(path_prefix, dir_name)
+    if os.path.isdir(output_dir):
+        print(f"{output_dir} already exists. Your logs might get overwritten.")
+        print("Please change the session name to retain previous logs")
+    else:
+        os.mkdir(output_dir)
+    current_session = ModelBuildingSession(session_name)
+    current_session.set_param('output_dir', dir_name)
+    current_session.set_param('experiment_name', 'SEIHRD_ENSEMBLE_V0')
+    current_session.set_param('model_class', 'homogeneous_ensemble')
+    current_session.print_parameters()
+    #TOFIX
+    current_session.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest'] = '7/5/20'
+    return current_session
 
 class ModelBuildingSession:
     def __init__(self, sess_name):
@@ -103,11 +128,15 @@ class ModelBuildingSession:
         self.params['time_interval_config.forecast_start_date'] = datetime.now().date() 
         self.params['time_interval_config.forecast_end_date'] = datetime.now().date()
         self.params['time_interval_config.forecast_planning_date'] = datetime.now().date()
+
+        self.params['bed_type_ratio'] = {'CCC2':0.62, 'DCHC':0.17,'DCH':0.16,'ICU':0.05}
+        self.params['bed_multiplier_count'] = 100
+        self.params['planning_level'] = 80
+        self.params['rt_multiplier_list'] = [0.9, 1.1, 1.2]
     
     def print_parameters(self):
         for param in self.params:
-            #print(f'{param} : {self.params[param]}')
-            pass
+            print('{} : {}'.format(param, self.params[param]))
     
     def validate_params(self, param_list):
         """
@@ -210,9 +239,10 @@ class ModelBuildingSession:
         self.train_config['training_loss_function']['variable_weights'][1]['weight'] = a_weight
         self.train_config['training_loss_function']['variable_weights'][2]['weight'] = r_weight
         self.train_config['training_loss_function']['variable_weights'][3]['weight'] = d_weight
+
     
-    def render_report(self, path = None):
-        with open('../notebooks/trial_outputs/model_building_report.md') as fh:
+    def render_report(self, path):
+        with open(path) as fh:
             content = fh.read()
 
         display(Markdown(content))
@@ -238,7 +268,7 @@ class ModelBuildingSession:
         forecast_length = 30
         
         #TODO check the date_of_interest parameter
-        self.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest'] = (current_day + timedelta(forecast_length/2)).strftime("%-m/%-d/%y")
+        #self.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest'] = (current_day + timedelta(forecast_length/2)).strftime("%-m/%-d/%y")
 
 
         name_prefix = self.params['region_name']
@@ -259,8 +289,8 @@ class ModelBuildingSession:
         m2_model = ModelFactory.get_model(model_class, m2_model_params)
         m2_metrics_param_ranges = m2_model.get_statistics_of_params()
 
-        metrics['metrics_M1_param_ranges'] = m1_metrics_param_ranges
-        metrics['metrics_M2_param_ranges'] = m2_metrics_param_ranges
+        metrics['M1_param_ranges'] = m1_metrics_param_ranges
+        metrics['M2_param_ranges'] = m2_metrics_param_ranges
 
         # Persist model parameters for generating planning reports
         self.m2_model_params = m2_model_params
@@ -293,16 +323,20 @@ class ModelBuildingSession:
         params['forecast_planning_variable'] = planning_variable
         params['forecast_planning_date'] = planning_date
         params['scenario_config_R0_multipliers'] = self.params['rt_multiplier_list']
-        #TODO: Check if the latent_information key is causing toruble:w
         metrics['M2_planning_level_model'] = model_params
-        print(model_params)
-        print('uncertainty config')
-        print(params['uncertainty_config'])
         r0_list = [r*r0 for r in self.params['rt_multiplier_list']]
         metrics['M2_whatif_scenarios_R0'] = r0_list
+        staffing_ratios_file_path = self.params['staff_ratios_file_path']
+
+
+        # Get staffing ratios
+        staff_ratios = get_clean_staffing_ratio(staffing_ratios_file_path)
+        bed_type_ratio = self.params['bed_type_ratio']
+        bed_multiplier_count = self.params['bed_multiplier_count']
+        metrics['staffing_planning'] = staff_ratios
+
         with open('../config/sample_forecasting_config.json') as f:
             forecast_config = json.load(f)
-
 
         # Get actual and smoothed observations
         df_actual = DataFetcherModule.get_observations_for_region(region_type, [region_name], 
@@ -317,7 +351,7 @@ class ModelBuildingSession:
 
 
         rt_multiplier_list = [1] + self.params['rt_multiplier_list']    
-        for r0_mult in rt_multiplier_list:
+        for idx, r0_mult in enumerate(rt_multiplier_list):
             percentile_config = deepcopy(forecast_config)
             forecast_module = ForecastingModuleConfig.parse_obj(percentile_config)
 
@@ -339,32 +373,44 @@ class ModelBuildingSession:
             artifact_path = os.path.join('../notebooks', output_dir, artifact_name)
             forecasting_output.to_csv(artifact_path, index=False)
 
+            forecasting_output = forecasting_output.reset_index()
+
+            if idx >= 1:
+                active_count = float(forecasting_output[forecasting_output['date'] == planning_date]['active_mean'])
+                staffing_df = compute_staffing_matrix(active_count,bed_type_ratio,
+                                                      staffing_ratios_file_path,
+                                                      bed_multiplier_count)
+                metrics[f'staffing_scenario_{idx}'] = staffing_df
+
+
             df_predictions_forecast_m2 = add_init_observations_to_predictions(df_actual, forecasting_output,
                                                                   forecast_run_day)
-            df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'])
+            df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'], format='%m/%d/%y')
+
 
             planning_outputs = os.path.join('../notebooks', output_dir, 'planning_outputs')
             if not os.path.exists(planning_outputs):
                 os.mkdir(planning_outputs)
             m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_forecast_m2,
-                  train2_start_date, forecast_start_date, column_tags=None, output_dir=planning_outputs,
+                  train2_start_date, forecast_start_date, column_tags=['mean'], output_dir=planning_outputs,
                   debug=False, plot_name_prefix = str(planning_level) + '_' + str(r0_mult))
 
-		
-	    artifacts_dict = {
-	        'plot_M2_planning_CARD': os.path.join(planning_outputs,'m2_planning.png'),
-	        'plot_M2_planning_ensemble_single_C': os.path.join(planning_outputs,'m2_planning_confirmed.png'),
-	        'plot_M2_planning_ensemble_single_A': os.path.join(planning_outputs,'m2_planning_hospitalized.png'),
-	        'plot_M2_planning_ensemble_single_R': os.path.join(planning_outputs,'m2_planning_recovered.png'),
-	        'plot_M2_planning_ensemble_single_D': os.path.join(planning_outputs,'m2_planning_deceased.png'),
-	        'plot_M2_scenario_1_forecast_CARD': os.path.join(planning_outputs,'m2_scenario_1_forecast.png'),
-	        'plot_M2_scenario_2_forecast_CARD': os.path.join(planning_outputs,'m2_scenario_2_forecast.png'),
-	        'plot_M2_scenario_3_forecast_CARD': os.path.join(planning_outputs,'m2_scenario_3_forecast.png'),
-	    }
+        
+        artifacts_dict = {
+            'plot_M2_planning_CARD': os.path.join(planning_outputs,f'{planning_level}_1_m2_forecast.png'),
+            'plot_M2_scenario_1_CARD': os.path.join(planning_outputs,f'{planning_level}_0.9_m2_forecast.png'),
+            'plot_M2_scenario_2_CARD': os.path.join(planning_outputs,f'{planning_level}_1.1_m2_forecast.png'),
+            'plot_M2_scenario_3_CARD': os.path.join(planning_outputs,f'{planning_level}_1.2_m2_forecast.png'),
+            'list_planning_output_forecast_file' : os.path.join(planning_outputs, f'{planning_level}_forecast.csv')
+        }
+
         planning_report = os.path.join('../notebooks', output_dir, 'planning_report.md')
         create_report(params, metrics, artifacts_dict, 
                       template_path='publishers/planning_template_v1.mustache', 
                       report_path=planning_report)
+        planning_artifacts_list = list(artifacts_dict.values())
+        planning_artifacts_list.append(planning_report)
+        return planning_artifacts_list
 
     
     def generate_planning_outputs(self):
@@ -406,18 +452,17 @@ class ModelBuildingSession:
                                  start_date = forecast_start_date, 
                                  end_date = forecast_end_date) 
 
-		#TODO: rename model_params to planning_model
-        model_params = percentile_params[planning_level]
+        planning_model_params = percentile_params[planning_level]
 
-        self.generate_planning_plots(model_params, planning_variable, 
-                                     planning_level, planning_date,
-                                     region_type, region_name, 
-                                     data_source, input_filepath, 
-                                     train2_start_date, train2_end_date, 
-                                     forecast_run_day, forecast_start_date, forecast_end_date)
+        planning_artifact_list = self.generate_planning_plots(planning_model_params, planning_variable, 
+                                                              planning_level, planning_date,
+                                                              region_type, region_name, 
+                                                              data_source, input_filepath, 
+                                                              train2_start_date, train2_end_date, 
+                                                              forecast_run_day, forecast_start_date, forecast_end_date)
             
         
-        return model_params
+        return planning_artifact_list
     
     def list_outputs(self):
         mandatory_params = self.mandatory_params['list_outputs']
