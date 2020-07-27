@@ -550,9 +550,9 @@ def train_eval_ensemble(region, region_type,
         if metric['metric_name'] == 'rmsle':
             testRMSLE += metric['value']
 
-    metrics['TestMAPE'] = testMAPE
-    metrics['TestRMLSE'] = testRMSLE
-    metrics.update(parse_metrics(eval_results, 'Test'))
+    metrics['test1_MAPE'] = testMAPE
+    metrics['test1_RMLSE'] = testRMSLE
+    metrics.update(parse_metrics(eval_results, 'test1'))
 
     final_train_config = deepcopy(default_train_config)
     final_train_config['data_source'] = data_source
@@ -584,9 +584,8 @@ def train_eval_ensemble(region, region_type,
 def train_eval_plot_ensemble(region, region_type,
                              current_day, forecast_length,
                              default_train_config, default_test_config, default_forecast_config,
-                             train_period=14, test_period=7,
-                             max_evals=1000, data_source=None, input_filepath=None, output_dir='',
-                             mlflow_log=False, mlflow_run_name=None):
+                             train_period=14, test_period=7, max_evals=1000, data_source=None,
+                             input_filepath=None, output_dir='', mlflow_log=False, mlflow_run_name=None):
 
     params_dict = dict()
     metrics_dict = dict()
@@ -662,25 +661,25 @@ def train_eval_plot_ensemble(region, region_type,
             mlflow.log_artifact('train1_output.json')
             mlflow.log_artifact('test1_output.json')
             mlflow.log_artifact('train2_output.json')
-    
+
     artifacts_dict = {
-        'plot_M1_CARD': os.path.join(output_dir,'m1.png'),
-        'plot_M1_single_C': os.path.join(output_dir,'m1_confirmed.png'),
-        'plot_M1_single_A': os.path.join(output_dir,'m1_hospitalized.png'),
-        'plot_M1_single_R': os.path.join(output_dir,'m1_recovered.png'),
-        'plot_M1_single_D': os.path.join(output_dir,'m1_deceased.png'),
-        'plot_M2_CARD': os.path.join(output_dir,'m2.png'),
-        'plot_M2_single_C': os.path.join(output_dir,'m2_confirmed.png'),
-        'plot_M2_single_A': os.path.join(output_dir,'m2_hospitalized.png'),
-        'plot_M2_single_R': os.path.join(output_dir,'m2_recovered.png'),
-        'plot_M2_single_D': os.path.join(output_dir,'m2_deceased.png'),
-        'plot_M2_forecast_CARD': os.path.join(output_dir,'m2_forecast.png'),
-        'plot_M2_forecast_single_C': os.path.join(output_dir,'m2_forecast_confirmed.png'),
-        'plot_M2_forecast_single_A': os.path.join(output_dir,'m2_forecast_hospitalized.png'),
-        'plot_M2_forecast_single_R': os.path.join(output_dir,'m2_forecast_recovered.png'),
-        'plot_M2_forecast_single_D': os.path.join(output_dir,'m2_forecast_deceased.png'),
-        'plot_planning_pdf_cdf': os.path.join(output_dir,'m2_distribution.png'),
-        'output_forecast_file': os.path.join('file:///', output_dir,'forecast.csv')
+        'plot_M1_CARD': os.path.join(output_dir, 'm1.png'),
+        'plot_M1_single_C': os.path.join(output_dir, 'm1_confirmed.png'),
+        'plot_M1_single_A': os.path.join(output_dir, 'm1_hospitalized.png'),
+        'plot_M1_single_R': os.path.join(output_dir, 'm1_recovered.png'),
+        'plot_M1_single_D': os.path.join(output_dir, 'm1_deceased.png'),
+        'plot_M2_CARD': os.path.join(output_dir, 'm2.png'),
+        'plot_M2_single_C': os.path.join(output_dir, 'm2_confirmed.png'),
+        'plot_M2_single_A': os.path.join(output_dir, 'm2_hospitalized.png'),
+        'plot_M2_single_R': os.path.join(output_dir, 'm2_recovered.png'),
+        'plot_M2_single_D': os.path.join(output_dir, 'm2_deceased.png'),
+        'plot_M2_forecast_CARD': os.path.join(output_dir, 'm2_forecast.png'),
+        'plot_M2_forecast_single_C': os.path.join(output_dir, 'm2_forecast_confirmed.png'),
+        'plot_M2_forecast_single_A': os.path.join(output_dir, 'm2_forecast_hospitalized.png'),
+        'plot_M2_forecast_single_R': os.path.join(output_dir, 'm2_forecast_recovered.png'),
+        'plot_M2_forecast_single_D': os.path.join(output_dir, 'm2_forecast_deceased.png'),
+        'plot_planning_pdf_cdf': os.path.join(output_dir, 'm2_distribution.png'),
+        'output_forecast_file': os.path.join(output_dir, 'forecast.csv')
     }
 
     return params_dict, metrics, artifacts_dict, train1_params, train2_params

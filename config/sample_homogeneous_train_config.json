@@ -16,28 +16,28 @@
                 }
              }
         },
-        "n": 50,
+        "n": 1000,
         "modes":{
             "training_mode": "constituent_models",
             "predict_mode": "mean_predictions"
         }
 	},
 	"search_space": {
-		"r0": [0.5, 3],
+		"r0": [0.7, 2],
 		"exposed_ratio": [0.001, 10],
 		"active_ratio": [0.001, 2],
-		"infectious_period": [1, 10],
-        "recovery_period" : [1, 15],
+		"infectious_period": [3, 10],
+        "recovery_period" : [1, 25],
         "deceased_period" : [1, 15],
         "recovered_ratio" : [0.7, 1],
-        "beta": [0, 20]
+        "beta": [0, 10]
 	},
 	"search_parameters": {
         "child_model": {
-		"max_evals": 10
+		"max_evals": 1000
         },
         "ensemble_model":{
-		"max_evals": 10
+		"max_evals": 100
         },
         "frac_for_child": 0.5
 	},
