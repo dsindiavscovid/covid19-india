@@ -595,8 +595,6 @@ def train_eval_plot_ensemble(region, region_type,
     artifacts_dict = dict()
     dates = dict()
 
-    # region name is passed as a list
-    assert type(region) == list
     name_prefix = " ".join(region[0])
 
     #Persist the training/testing durations
