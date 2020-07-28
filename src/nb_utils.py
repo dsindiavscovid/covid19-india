@@ -582,10 +582,122 @@ def train_eval_ensemble(region, region_type,
 
 
 def train_eval_plot_ensemble(region, region_type,
-                             current_day, forecast_length,
+                             train1_run_day, train1_start_date, train1_end_date,
+                             test_run_day, test_start_date, test_end_date,
+                             train2_run_day, train2_start_date, train2_end_date,
+                             forecast_run_day, forecast_start_date, forecast_end_date,
                              default_train_config, default_test_config, default_forecast_config,
-                             train_period=14, test_period=7, max_evals=1000, data_source=None,
+                             child_model_max_eval=10, ensemble_model_max_eval=10, data_source=None,
                              input_filepath=None, output_dir='', mlflow_log=False, mlflow_run_name=None):
+
+    params_dict = dict()
+    metrics_dict = dict()
+    artifacts_dict = dict()
+    dates = dict()
+
+    # region name is passed as a list
+    assert type(region) == list
+    name_prefix = " ".join(region[0])
+
+    #Persist the training/testing durations
+    dates['train1_run_day'] = train1_run_day
+    dates['train1_start_date'] = train1_start_date
+    dates['train1_end_date'] = train1_end_date
+
+    dates['train2_run_day'] = train2_run_day
+    dates['train2_start_date'] = train2_start_date
+    dates['train2_end_date'] = train2_end_date
+
+    dates['test_run_day'] = test_run_day
+    dates['test_start_date'] = test_start_date
+    dates['test_end_date'] = test_end_date
+
+    dates['forecast_run_day'] = forecast_run_day
+    dates['forecast_start_date'] = forecast_start_date
+    dates['forecast_end_date'] = forecast_end_date
+
+    params_dict.update({'time_interval_config': dates})
+    params_dict['region_name'] = " ".join(region)
+    params_dict['region_type'] = region_type
+    params_dict['data_source'] = data_source
+    params_dict['data_file_path'] = os.path.join('file:///', os.getcwd(), input_filepath) \
+        if input_filepath is not None else "No path available"
+    params_dict['search_parameters'] = default_train_config['search_parameters']
+    params_dict['param_search_space_config'] = default_train_config['search_space']
+    params_dict['train_loss_function_config'] = default_train_config['training_loss_function']
+    params_dict['eval_loss_function_config'] = default_train_config['loss_functions']
+    uncertainty_params = default_forecast_config['model_parameters']['uncertainty_parameters']
+    params_dict['forecast_percentiles'] = uncertainty_params['percentiles']
+    params_dict['forecast_planning_variable'] = uncertainty_params['column_of_interest']
+    params_dict['forecast_planning_date'] = uncertainty_params['date_of_interest']
+
+    # TODO: Fix this param
+    max_evals = 10
+
+    params, metrics, train1_params, train2_params = train_eval_ensemble([region], region_type,
+                                                                        train1_start_date, train1_end_date,
+                                                                        train2_start_date, train2_end_date,
+                                                                        train2_run_day,
+                                                                        test_start_date, test_end_date,
+                                                                        default_train_config, default_test_config,
+                                                                        max_evals=max_evals, data_source=data_source,
+                                                                        input_filepath=input_filepath,
+                                                                        mlflow_log=mlflow_log,
+                                                                        name_prefix=name_prefix)
+
+    print('forecast_config')
+    print(default_forecast_config)
+    print(default_forecast_config['forecast_start_date'])
+    print(type(default_forecast_config['forecast_start_date']))
+    print(default_forecast_config['forecast_end_date'])
+
+    print("Creating artifacts...")
+    create_plots(region, region_type, train1_params, train2_params, train1_run_day, train1_start_date, train1_end_date,
+                 test_run_day, test_start_date, test_end_date, train2_run_day, train2_start_date, train2_end_date,
+                 forecast_run_day, forecast_start_date, forecast_end_date, default_forecast_config,
+                 data_source=data_source, input_filepath=input_filepath, output_dir=output_dir, debug=True)
+   
+    if mlflow_log:
+        print("Logging to MLflow...")
+        with mlflow.start_run(run_name=mlflow_run_name):
+            mlflow.log_params(params)
+            mlflow.log_metrics(metrics)
+            mlflow.log_artifact(name_prefix+'_m1.png')
+            mlflow.log_artifact(name_prefix+'_m2.png')
+            mlflow.log_artifact(name_prefix+'_m3.png')
+            mlflow.log_artifact('train_config.json')
+            mlflow.log_artifact('train1_output.json')
+            mlflow.log_artifact('test1_output.json')
+            mlflow.log_artifact('train2_output.json')
+
+    artifacts_dict = {
+        'plot_M1_CARD': os.path.join(output_dir, 'm1.png'),
+        'plot_M1_single_C': os.path.join(output_dir, 'm1_confirmed.png'),
+        'plot_M1_single_A': os.path.join(output_dir, 'm1_hospitalized.png'),
+        'plot_M1_single_R': os.path.join(output_dir, 'm1_recovered.png'),
+        'plot_M1_single_D': os.path.join(output_dir, 'm1_deceased.png'),
+        'plot_M2_CARD': os.path.join(output_dir, 'm2.png'),
+        'plot_M2_single_C': os.path.join(output_dir, 'm2_confirmed.png'),
+        'plot_M2_single_A': os.path.join(output_dir, 'm2_hospitalized.png'),
+        'plot_M2_single_R': os.path.join(output_dir, 'm2_recovered.png'),
+        'plot_M2_single_D': os.path.join(output_dir, 'm2_deceased.png'),
+        'plot_M2_forecast_CARD': os.path.join(output_dir, 'm2_forecast.png'),
+        'plot_M2_forecast_single_C': os.path.join(output_dir, 'm2_forecast_confirmed.png'),
+        'plot_M2_forecast_single_A': os.path.join(output_dir, 'm2_forecast_hospitalized.png'),
+        'plot_M2_forecast_single_R': os.path.join(output_dir, 'm2_forecast_recovered.png'),
+        'plot_M2_forecast_single_D': os.path.join(output_dir, 'm2_forecast_deceased.png'),
+        'plot_planning_pdf_cdf': os.path.join(output_dir, 'm2_distribution.png'),
+        'output_forecast_file': os.path.join(output_dir, 'forecast.csv')
+    }
+
+    return params_dict, metrics, artifacts_dict, train1_params, train2_params
+
+
+def train_eval_plot_ensemble_v1(region, region_type,
+                                current_day, forecast_length,
+                                default_train_config, default_test_config, default_forecast_config,
+                                train_period=14, test_period=7, max_evals=1000, data_source=None,
+                                input_filepath=None, output_dir='', mlflow_log=False, mlflow_run_name=None):
 
     params_dict = dict()
     metrics_dict = dict()
@@ -642,6 +754,12 @@ def train_eval_plot_ensemble(region, region_type,
                                                                         input_filepath=input_filepath,
                                                                         mlflow_log=mlflow_log,
                                                                         name_prefix=name_prefix)
+
+    print('forecast_config')
+    print(default_forecast_config)
+    print(default_forecast_config['forecast_start_date'])
+    print(type(default_forecast_config['forecast_start_date']))
+    print(default_forecast_config['forecast_end_date'])
 
     print("Creating artifacts...")
     create_plots(region, region_type, train1_params, train2_params, train1_run_day, train1_start_date, train1_end_date,

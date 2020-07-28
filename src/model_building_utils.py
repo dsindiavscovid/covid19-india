@@ -36,6 +36,7 @@ def create_session(session_name, user_name='guest'):
     if os.path.isdir(output_dir):
         print(f"{output_dir} already exists. Your logs might get overwritten.")
         print("Please change the session name to retain previous logs")
+        pass
     else:
         os.mkdir(output_dir)
     current_session = ModelBuildingSession(session_name)
@@ -50,6 +51,12 @@ def create_session(session_name, user_name='guest'):
 
 
 class ModelBuildingSession:
+    """
+        Session object to encapsulate the model building
+        and training process.
+
+
+    """
     def __init__(self, sess_name):
         self.sess_name = sess_name
         self.params = dict()
@@ -115,12 +122,12 @@ class ModelBuildingSession:
         # TODO: Need to set the train_eval_plot_ensemble() function to
         # accept the right intervals
         # Currently the function takes in a deterministic interval on the train duration
-        self.params['time_interval_config.train_start_date'] = datetime.now().date()
-        self.params['time_interval_config.train_end_date'] = datetime.now().date()
-        self.params['time_interval_config.backtesting_split_date'] = datetime.now().date()
-        self.params['time_interval_config.forecast_start_date'] = datetime.now().date() 
-        self.params['time_interval_config.forecast_end_date'] = datetime.now().date()
-        self.params['time_interval_config.forecast_planning_date'] = datetime.now().date()
+        #self.params['time_interval_config.train_start_date'] = datetime.now().date()
+        #self.params['time_interval_config.train_end_date'] = datetime.now().date()
+        #self.params['time_interval_config.backtesting_split_date'] = datetime.now().date()
+        #self.params['time_interval_config.forecast_start_date'] = datetime.now().date() 
+        #self.params['time_interval_config.forecast_end_date'] = datetime.now().date()
+        #self.params['time_interval_config.forecast_planning_date'] = datetime.now().date()
 
         self.params['bed_type_ratio'] = {'CCC2':0.62, 'DCHC':0.17,'DCH':0.16,'ICU':0.05}
         self.params['bed_multiplier_count'] = 100
@@ -233,6 +240,18 @@ class ModelBuildingSession:
         self.train_config['training_loss_function']['variable_weights'][2]['weight'] = r_weight
         self.train_config['training_loss_function']['variable_weights'][3]['weight'] = d_weight
 
+        #self.train_config['train_start_date'] = self.params['time_interval_config.train_start_date']
+        #self.train_config['train_end_date'] = self.params['time_interval_config.train_end_date']
+        #backtesting_split_date = self.params['time_interval_config.backtesting_split_date']
+
+        forecast_start_date = self.params['time_interval_config.forecast_start_date']
+        forecast_end_date = self.params['time_interval_config.forecast_end_date']
+        self.forecast_config['forecast_start_date'] = forecast_start_date
+        self.forecast_config['forecast_end_date'] = forecast_end_date
+
+        forecast_planning_date = self.params['time_interval_config.forecast_planning_date']
+        self.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest'] = forecast_planning_date
+
     
     def render_report(self, path):
         with open(path) as fh:
@@ -244,37 +263,54 @@ class ModelBuildingSession:
     def build_models_and_generate_forecast(self):
         mandatory_params = self.mandatory_params['build_models_and_generate_forecast']
         self.validate_params(mandatory_params)
-        # Use the region and all arguments to train and 
-        # generate forecasts
-        
-        # train_config[''] = 'blah'
-        # train_eval_forecast() # equivalent from nb_utils
+
 
         self.setup_defaults()
         self.param_search_config = self.train_config['search_space']
         self.train_loss_config = self.train_config['training_loss_function']
         self.eval_loss_config = self.train_config['loss_functions']
         model_class = self.params['model_class']
-
-
-        current_day = datetime.now().date() - timedelta(25)
-        forecast_length = 30
         
-        #TODO check the date_of_interest parameter
-        #self.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest'] = (current_day + timedelta(forecast_length/2)).strftime("%-m/%-d/%y")
+        # Region params
+        region = self.params['region_name']
+        region_type = self.params['region_type']
 
+        # Train/test intervals
+        train1_start_date = self.params['time_interval_config.train_start_date']
+        train1_run_day = (datetime.strptime(train1_start_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y")
+        backtesting_split_date = self.params['time_interval_config.backtesting_split_date']
+        train1_end_date = (datetime.strptime(backtesting_split_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y")
+
+        test_run_day = (datetime.strptime(backtesting_split_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y")
+        test_start_date = backtesting_split_date
+        # Use the last date of the train interval as the test interval end date
+        test_end_date = self.params['time_interval_config.train_end_date']
+
+        train2_run_day = (datetime.strptime(backtesting_split_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y") 
+        train2_start_date = self.params['time_interval_config.backtesting_split_date']
+        train2_end_date = self.params['time_interval_config.train_end_date']
+
+        forecast_start_date = self.params['time_interval_config.forecast_start_date']
+        forecast_run_day = (datetime.strptime(forecast_start_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y")
+        forecast_end_date = self.params['time_interval_config.forecast_end_date']
 
         name_prefix = self.params['region_name']
         output_dir = os.path.join('../notebooks', self.params['output_dir'])
-        
-        params, metrics, artifacts_dict, train1_params, train2_params = train_eval_plot_ensemble([self.params['region_name']], self.params['region_type'],
-                         current_day, forecast_length,
-                         self.train_config, self.test_config, self.forecast_config,
-                         train_period = 14, test_period = 7,
-                         max_evals = 1000, data_source = self.params['data_source'],
-                         input_filepath = self.params['data_filepath'],
-                         output_dir = output_dir,
-                         mlflow_log = False, mlflow_run_name = self.params['run_name'])
+
+        params, metrics, artifacts_dict, train1_params, train2_params = train_eval_plot_ensemble(region, region_type,
+            train1_run_day, train1_start_date, train1_end_date,
+            test_run_day, test_start_date, test_end_date,
+            train2_run_day, train2_start_date, train2_end_date,
+            forecast_run_day, forecast_start_date, forecast_end_date,
+            self.train_config, self.test_config, 
+            self.forecast_config, 
+            data_source=self.params['data_source'], 
+            input_filepath=self.params['data_filepath'], 
+            output_dir=output_dir, 
+            mlflow_log=False, 
+            mlflow_run_name=self.params['run_name'])
+
+
         m1_model_params = train1_params['model_parameters']
         m1_model = ModelFactory.get_model(model_class, m1_model_params)
         m1_metrics_param_ranges = m1_model.get_statistics_of_params()
