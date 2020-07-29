@@ -73,7 +73,9 @@ def load_observations_data():
 
     numeric_cols = ['confirmed', 'active', 'recovered', 'deceased', 'tested', 'migrated']
     df_districts_all.loc[:, numeric_cols] = df_districts_all.loc[:, numeric_cols].apply(pd.to_numeric)
-
+    df_districts_all['date'] = pd.to_datetime(df_districts_all['date'], format = "%Y-%m-%d")
+    df_districts_all['date'] = df_districts_all['date'].dt.strftime("%-m/%-d/%y")
+    df_districts_all.set_index('date',  inplace = True)
     return df_districts_all
 
 
@@ -82,5 +84,12 @@ class TrackerDataAll(DataFetcherBase):
     def get_observations_for_single_region(self, region_type, region_name, filepath=None):
         observations_df = load_observations_data()
         region_df = observations_df[
-            (observations_df["region_name"] == region_name) & (observations_df["region_type"] == region_type)]
+            (observations_df["district"] == region_name) & (region_type.lower() == 'district')]
+        
+        region_df = region_df.drop(['state', 'district'], axis = 1)
+        region_df = region_df.transpose()
+        region_df = region_df.reset_index()
+        region_df = region_df.rename(columns = {'index' : "observation"})
+        region_df.insert(0, 'region_name', region_name.lower())
+        region_df.insert(1, 'region_type', region_type.lower())
         return region_df
