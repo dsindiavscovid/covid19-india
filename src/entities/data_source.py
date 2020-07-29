@@ -8,3 +8,4 @@ class DataSource(str, enum.Enum):
     direct_csv = "direct_csv"
     official_data = "official_data"
     rootnet_stats_history = "rootnet_stats_history"
+    tracker_data_all = "tracker_data_all"
