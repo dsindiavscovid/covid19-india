@@ -85,7 +85,8 @@ class TrackerDataAll(DataFetcherBase):
         observations_df = load_observations_data()
         region_df = observations_df[
             (observations_df["district"] == region_name) & (region_type.lower() == 'district')]
-        
+        region_df = region_df.rename(columns = {'active': 'hospitalized'})
+        region_df.index.name = 'index'
         region_df = region_df.drop(['state', 'district'], axis = 1)
         region_df = region_df.transpose()
         region_df = region_df.reset_index()
