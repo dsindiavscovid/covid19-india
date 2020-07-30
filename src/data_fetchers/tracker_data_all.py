@@ -82,7 +82,7 @@ def load_observations_data():
 class TrackerDataAll(DataFetcherBase):
 
     def get_observations_for_single_region(self, region_type, region_name, filepath=None):
-        region_name = region_name.capitalize()
+        region_name = region_name = " ".join([word.capitalize() for word in region_name.split(" ")])
         observations_df = load_observations_data()
         region_df = observations_df[
             (observations_df["district"] == region_name) & (region_type.lower() == 'district')]
