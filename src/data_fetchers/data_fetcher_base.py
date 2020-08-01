@@ -3,8 +3,7 @@ from typing import List
 
 import pandas as pd
 
-from data_fetchers.data_fetcher_utils import load_regional_metadata
-from utils.data_util import smooth_data
+from data_fetchers.data_fetcher_utils import load_regional_metadata, smooth_data
 
 ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})
 

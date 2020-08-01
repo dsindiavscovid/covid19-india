@@ -1,0 +1,54 @@
+# Planning Report -  {{params_region_type}} - {{params_region_name}}  
+
+
+## Planning Set up
+
+* Planning Variable:  {{params_forecast_planning_variable}}
+* Planning Date:  {{params_forecast_planning_date}}
+
+* Planning Uncertainty Config: 
+```yaml
+{{params_uncertainty_config}}
+```
+
+* What if  Scenarios - R0 Multipliers: {{params_scenario_config_R0_multipliers}}
+
+##  Model Parameters
+
+* Planning Level Model: 
+```yaml
+{{metrics_M2_planning_level_model}}
+```
+
+##  Planning Forecast
+  
+![Planning Forecast Plot]({{artifact_list_plot_M2_planning_CARD}})
+
+
+### Staffing Matrix
+
+{{metrics_staffing_planning}}
+
+
+##  What-if Scenario Forecasts
+
+What if  Scenarios - R0: {{metrics_M2_whatif_scenarios_R0}}
+
+![Planning Scenario 1 Forecast Plot]({{artifact_list_plot_M2_scenario_1_CARD}})
+
+![Planning Scenario 2 Forecast Plot]({{artifact_list_plot_M2_scenario_2_CARD}})
+
+![Planning Scenario 3 Forecast Plot]({{artifact_list_plot_M2_scenario_3_CARD}})
+
+###  Staffing Matrices
+
+{{metrics_staffing_scenario_1}}
+
+{{metrics_staffing_scenario_2}}
+
+{{metrics_staffing_scenario_3}}
+
+
+## Main Forecast Output
+
+Forecast CSV file: {{artifact_list_planning_output_forecast_file}}

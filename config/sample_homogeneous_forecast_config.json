@@ -6,8 +6,6 @@
 	"forecast_start_date": "",
 	"forecast_end_date": "",
 	"model_class": "homogeneous_ensemble",
-    "forecast_variables": ["confirmed", "recovered", "deceased"],
-
 	"model_parameters": {
         "child_model":{
             "model_class": "SEIHRD",
@@ -20,44 +18,19 @@
             "training_mode": "constituent_models",
             "predict_mode": "predictions_with_uncertainty"
         },
-        "constituent_models": {"0": {"model_class": "SEIHRD",
-    "model_parameters": {"incubation_period": 5,
-     "F_icu": 0.05,
-     "EbyCRatio": 28.16604550441872,
-     "F_fatalities": 0.02466701801276612,
-     "F_hospitalization": 0.06963507606419204,
-     "IbyCRatio": 1.4785269422997283,
-     "infectious_period": 5.42824969419175,
-     "r0": 2.0045875407735303,
-     "LatentEbyCRatio": {"5/27/20": 28.16604550441872,
-      "6/3/20": 1.6812382970858852},
-     "LatentIbyCRatio": {"5/27/20": 1.4785269422997283,
-      "6/3/20": 0.26879511010742685}}},
-   "1": {"model_class": "SEIHRD",
-    "model_parameters": {"incubation_period": 5,
-     "F_icu": 0.05,
-     "EbyCRatio": 68.61691160476231,
-     "F_fatalities": 0.03233307338897204,
-     "F_hospitalization": 0.022138183078344184,
-     "IbyCRatio": 0.019608256092923135,
-     "infectious_period": 2.960032050290712,
-     "r0": 1.798549632059788,
-     "LatentEbyCRatio": {"5/27/20": 68.61691160476231,
-      "6/3/20": 0.9901764632322094},
-     "LatentIbyCRatio": {"5/27/20": 0.019608256092923135,
-      "6/3/20": 0.565516593409033}}}},
-  "constituent_model_losses": {"0": 469.69153527348624,
-   "1": 1506.0568746155632},
-  "beta": 0.27702349035285123,
-   "uncertainty_parameters":{
-       "include_mean": "True",
-       "date_of_interest": "",
-       "column_of_interest": "confirmed",
-       "percentiles": [10, 20, 30, 40, 50, 60, 70, 80, 90],
-       "ci": [95, 99],
-       "tolerance": 1,
-       "param_key_of_interest": "r0"
+        "constituent_models": {},
+      "constituent_model_losses": {},
+      "beta": 0.0,
+      "uncertainty_parameters":{
+         "include_mean": "True",
+         "date_of_interest": "",
+         "column_of_interest": "confirmed",
+         "percentiles": [10, 20, 30, 40, 50, 60, 70, 80, 90],
+         "ci": [95, 99],
+         "tolerance": 1,
+         "param_key_of_interest": "r0"
        }
 	},
-    "input_filepath": ""
+    "input_filepath": "",
+    "output_dir": ""
 }

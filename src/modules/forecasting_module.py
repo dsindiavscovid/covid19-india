@@ -4,8 +4,7 @@ from entities.model_class import ModelClass
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from utils.config_util import read_config_file
-from utils.data_transformer_helper import convert_to_jhu_format, convert_to_old_required_format, \
-    convert_to_required_format
+from utils.data_transformer_helper import convert_to_old_required_format, convert_to_required_format
 
 
 class ForecastingModule(object):
@@ -51,6 +50,6 @@ class ForecastingModule(object):
         predictions = forecasting_module.predict_for_region(config.data_source, config.region_type, config.region_name,
                                                             config.run_day, config.forecast_start_date,
                                                             config.forecast_end_date, config.input_filepath)
-        if config.output_filepath is not None:
-            predictions.to_csv(config.output_filepath, index=False)
+        if config.output_file_prefix is not None:
+            predictions.to_csv(f'{config.output_file_prefix}.csv', index=False)
         return predictions

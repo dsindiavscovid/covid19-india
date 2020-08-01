@@ -97,6 +97,6 @@ class ScenarioForecastingModule(object):
                                                             config.run_day, config.start_date, config.input_type,
                                                             config.time_intervals,
                                                             config.input_filepath)
-        if config.output_filepath is not None:
-            predictions.to_csv(config.output_filepath, index=False)
+        if config.output_file_prefix is not None:
+            predictions.to_csv(f'{config.output_file_prefix}.csv', index=False)
         return predictions

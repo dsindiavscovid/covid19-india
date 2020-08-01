@@ -13,11 +13,10 @@ def evaluate_for_forecast(observations, predictions_df, loss_functions: List[Los
         raise Exception("Error in evaluation: number of rows don't match in predictions and actual dataframe")
     for loss_function in loss_functions:
         value = 0
-        for variable_weight in loss_function.variable_weights:
-            variable_name = variable_weight.variable.name
-            value += variable_weight.weight * (
-                getattr(metrics_util, loss_function.metric_name.name)(actual_df[variable_name].values,
-                                                                      predictions_df[variable_name].values))
+        for variable, weight in loss_function.weights.items():
+            value += weight * (
+                getattr(metrics_util, loss_function.metric_name.name)(actual_df[variable.name].values,
+                                                                      predictions_df[variable.name].values))
         loss_function.value = value
         metrics_results.append(loss_function.dict())
     return metrics_results

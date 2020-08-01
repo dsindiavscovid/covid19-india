@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timedelta
 
 from configs.base_config import TrainingModuleConfig
@@ -35,7 +36,7 @@ class TrainingModule(object):
                                                    config.train_start_date,
                                                    config.train_end_date,
                                                    config.search_space,
-                                                   config.search_parameters, config.training_loss_function,
+                                                   config.search_parameters, config.train_loss_function,
                                                    config.input_filepath)
 
         if not ("modes" in config.model_parameters.keys() and config.model_parameters['modes'][
@@ -49,11 +50,14 @@ class TrainingModule(object):
                                                                                   config.region_name, run_day,
                                                                                   config.train_start_date,
                                                                                   config.train_end_date,
-                                                                                  config.loss_functions,
+                                                                                  config.eval_loss_functions,
                                                                                   config.input_filepath)
-        if config.output_filepath is not None:
-            with open(config.output_filepath, 'w') as outfile:
+        if config.output_file_prefix is not None:
+            with open(os.path.join(config.output_dir, f'{config.output_file_prefix}_output.json'), 'w') as outfile:
                 json.dump(results, outfile, indent=4)
+        if config.output_dir is not None and config.output_file_prefix is not None:
+            with open(os.path.join(config.output_dir, f'{config.output_file_prefix}_model.json'), 'w') as outfile:
+                json.dump(training_module._model, outfile, indent=4)
         return results
 
     @staticmethod

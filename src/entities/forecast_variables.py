@@ -18,3 +18,7 @@ class ForecastVariable(str, enum.Enum):
     exposed = "exposed"
     infected = "infected"
     final = "final"
+
+    @classmethod
+    def input_variables(cls):
+        return [cls.confirmed, cls.deceased, cls.hospitalized, cls.recovered]

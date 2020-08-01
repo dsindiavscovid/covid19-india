@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 import pandas as pd
 
 
@@ -31,4 +29,3 @@ def get_best_index(df, percentile, tolerance=1):
         # TODO: Some indication to the user that the percentile is off
         idx = (df['cdf'] - percentile / 100).apply(abs).idxmin()
     return df.iloc[idx, :]['index']
-

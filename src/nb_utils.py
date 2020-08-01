@@ -1,6 +1,5 @@
 import json
 import os
-
 from copy import deepcopy
 from datetime import datetime, timedelta
 
@@ -15,8 +14,9 @@ from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
+from utils.data_transformer_helper import loss_json_to_dataframe, get_observations_subset, \
+    add_init_observations_to_predictions
 from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots
-from utils.data_transformer_helper import loss_json_to_dataframe
 
 
 def parse_params(parameters, interval='Train1'):
@@ -77,8 +77,8 @@ def parse_metrics(metrics, interval='Train1'):
     return metric_dict
 
 
-def train_eval(region, region_type, 
-               train1_start_date, train1_end_date, 
+def train_eval(region, region_type,
+               train1_start_date, train1_end_date,
                train2_start_date, train2_end_date, run_day,
                test_start_date, test_end_date,
                default_train_config, default_test_config,
@@ -112,9 +112,9 @@ def train_eval(region, region_type,
         Train2 : train2_output.json (name_prefix + '_train2_output.json')
         Test   : test1_output.json   (name_prefix + '_test1_output.json')
     """
-    
+
     # Save metrics and params for logging
-    
+
     params = dict()
     metrics = dict()
 
@@ -150,10 +150,10 @@ def train_eval(region, region_type,
     train2_model_params = deepcopy(model_params)
 
     if mlflow_log:
-        train_config['output_filepath'] = 'train1_output.json'
+        train_config['output_file_prefix'] = 'train1'
     else:
         assert name_prefix is not None
-        train_config['output_filepath'] = name_prefix + '_train1_output.json'
+        train_config['output_file_prefix'] = name_prefix + '_train1'
 
     train_module_config = TrainingModuleConfig.parse_obj(train_config)
     train_results = TrainingModule.from_config(train_module_config)
@@ -167,7 +167,7 @@ def train_eval(region, region_type,
             train1RMSLE += metric['value']
 
     metrics['Train1RMLSE'] = train1RMSLE
-    metrics['Train1MAPE'] = train1MAPE 
+    metrics['Train1MAPE'] = train1MAPE
     metrics.update(parse_metrics(train_results['train_metric_results'], 'Train1'))
     train1_model_params['model_parameters'] = train_results['model_parameters']
 
@@ -180,15 +180,15 @@ def train_eval(region, region_type,
     test_config['run_day'] = run_day
     test_config['model_parameters'].update(train_results['model_parameters'])
     test_config['input_filepath'] = input_filepath
-        
-    if mlflow_log:
-        test_config['output_filepath'] = 'test1_output.json'
-    else:
-        test_config['output_filepath'] = name_prefix + '_test1_output.json'
 
-    test_module_config = ModelEvaluatorConfig.parse_obj(test_config) 
+    if mlflow_log:
+        test_config['output_file_prefix'] = 'test1'
+    else:
+        test_config['output_file_prefix'] = name_prefix + '_test1'
+
+    test_module_config = ModelEvaluatorConfig.parse_obj(test_config)
     eval_results = ModelEvaluator.from_config(test_module_config)
-    
+
     testMAPE = 0
     testRMSLE = 0
     for metric in eval_results:
@@ -200,7 +200,7 @@ def train_eval(region, region_type,
     metrics['TestMAPE'] = testMAPE
     metrics['TestRMLSE'] = testRMSLE
     metrics.update(parse_metrics(eval_results, 'Test'))
-    
+
     final_train_config = deepcopy(default_train_config)
     final_train_config['data_source'] = data_source
     final_train_config['region_name'] = region
@@ -209,11 +209,11 @@ def train_eval(region, region_type,
     final_train_config['train_end_date'] = train2_end_date
     final_train_config['search_parameters']['max_evals'] = max_evals
     final_train_config['input_filepath'] = input_filepath
-    
+
     if mlflow_log:
-        final_train_config['output_filepath'] = 'train2_output.json'
+        final_train_config['output_file_prefix'] = 'train2'
     else:
-        final_train_config['output_filepath'] = name_prefix + '_train2_output.json'
+        final_train_config['output_file_prefix'] = name_prefix + '_train2'
 
     final_train_module_config = TrainingModuleConfig.parse_obj(final_train_config)
     final_results = TrainingModule.from_config(final_train_module_config)
@@ -229,10 +229,10 @@ def train_eval(region, region_type,
     metrics['Train2MAPE'] = train2MAPE
     metrics['Train2RMLSE'] = train2RMSLE
     metrics.update(parse_metrics(final_results['train_metric_results'], 'Train2'))
-    
+
     model_params['model_parameters'] = final_results['model_parameters']
     train2_model_params['model_parameters'] = final_results['model_parameters']
-    
+
     return params, metrics, train1_model_params, train2_model_params
 
 
@@ -289,31 +289,31 @@ def forecast(model_params, run_day, forecast_start_date, forecast_end_date, defa
     return forecast_df
 
 
-def get_observations_in_range(data_source, region_name, region_type, 
+def get_observations_in_range(data_source, region_name, region_type,
                               start_date, end_date,
                               obs_type='confirmed'):
     """
         Return a list of counts of obs_type cases
         from the region in the specified date range.
     """
-    
+
     observations = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source)
     observations_df = observations[observations['observation'] == obs_type]
-    
+
     start_date = datetime.strptime(start_date, '%m/%d/%y')
     end_date = datetime.strptime(end_date, '%m/%d/%y')
     delta = (end_date - start_date).days
     days = []
     for i in range(delta + 1):
         days.append((start_date + timedelta(days=i)).strftime('%-m/%-d/%-y'))
-    
+
     # Fetch observations in the date range
     observations_df = observations_df[days]
-    
+
     # Transpose the df to get the
     # observations_df.shape = (num_days, 1)
     observations_df = observations_df.reset_index(drop=True).transpose()
-    
+
     # Rename the column to capture observation type
     # Note that the hardcoded 0 in the rename comes from the reset_index
     # from the previous step
@@ -337,7 +337,7 @@ def train_eval_forecast(region, region_type,
         we first check if the forecast_end_date is prior to the current date
         so that we have actual_confirmed cases and then plot the predictions.
     """
-    
+
     params, metrics, model_params = train_eval(region, region_type,
                                                train1_start_date, train1_end_date,
                                                train2_start_date, train2_end_date,
@@ -347,8 +347,8 @@ def train_eval_forecast(region, region_type,
                                                input_filepath=input_filepath,
                                                mlflow_log=mlflow_log, name_prefix=name_prefix)
     model_params['model_parameters']['incubation_period'] = 5
-    forecast_df = forecast(model_params, forecast_run_day, 
-                           forecast_start_date, forecast_end_date, 
+    forecast_df = forecast(model_params, forecast_run_day,
+                           forecast_start_date, forecast_end_date,
                            default_forecast_config)
 
     plot(model_params, forecast_df, forecast_start_date,
@@ -358,7 +358,6 @@ def train_eval_forecast(region, region_type,
 
 
 def set_dates(current_day, train_period=7, test_period=7):
-    
     dates = dict()
 
     # Train1
@@ -391,7 +390,7 @@ def set_dates(current_day, train_period=7, test_period=7):
     return dates
 
 
-def train_eval_plot(region, region_type, 
+def train_eval_plot(region, region_type,
                     current_day, forecast_length,
                     default_train_config, default_test_config, default_forecast_config,
                     max_evals=1000, data_source=None, input_filepath=None,
@@ -413,23 +412,23 @@ def train_eval_plot(region, region_type,
     Note:
         date_format : datetime.date object 
     """
-        
+
     name_prefix = " ".join(region)
-        
+
     dates = set_dates(current_day)
-    
+
     train1_start_date = dates['train1_start_date']
     train1_end_date = dates['train1_end_date']
     train1_run_day = dates['train1_run_day']
-    
+
     train2_start_date = dates['train2_start_date']
     train2_end_date = dates['train2_end_date']
     train2_run_day = dates['train2_run_day']
-    
+
     test_start_date = dates['test_start_date']
     test_end_date = dates['test_end_date']
     test_run_day = dates['test_run_day']
-    
+
     params, metrics, train1_params, train2_params = train_eval(region, region_type,
                                                                train1_start_date, train1_end_date,
                                                                train2_start_date, train2_end_date, train2_run_day,
@@ -449,14 +448,14 @@ def train_eval_plot(region, region_type,
     forecast_start_date = (datetime.strptime(train2_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
     plot_m3(train2_params, train1_start_date, forecast_start_date, forecast_length, default_forecast_config,
             plot_name=name_prefix + '_m3.png')
-    
+
     if mlflow_log:
         with mlflow.start_run(run_name=mlflow_run_name):
             mlflow.log_params(params)
             mlflow.log_metrics(metrics)
-            mlflow.log_artifact(name_prefix+'_m1.png')
-            mlflow.log_artifact(name_prefix+'_m2.png')
-            mlflow.log_artifact(name_prefix+'_m3.png')
+            mlflow.log_artifact(name_prefix + '_m1.png')
+            mlflow.log_artifact(name_prefix + '_m2.png')
+            mlflow.log_artifact(name_prefix + '_m3.png')
             mlflow.log_artifact('train_config.json')
             mlflow.log_artifact('train1_output.json')
             mlflow.log_artifact('test1_output.json')
@@ -469,21 +468,9 @@ def train_eval_ensemble(region, region_type,
                         test_start_date, test_end_date,
                         default_train_config, default_test_config,
                         max_evals=1000, data_source=None, input_filepath=None,
-                        mlflow_log=True, name_prefix=None):
-
+                        mlflow_log=True, name_prefix=None, output_dir=''):
     params = dict()
     metrics = dict()
-
-    # params['region'] = " ".join(region)
-    # params['region_type'] = region_type
-    # params['train1_start_date'] = train1_start_date
-    # params['train1_end_date'] = train1_end_date
-    # params['train2_start_date'] = train2_start_date
-    # params['train2_end_date'] = train2_end_date
-    # params['run_day'] = run_day
-    # params['test_start_date'] = test_start_date
-    # params['test_end_date'] = test_end_date
-    # params['data_source'] = data_source
 
     train_config = deepcopy(default_train_config)
     train_config['data_source'] = data_source
@@ -494,6 +481,8 @@ def train_eval_ensemble(region, region_type,
     train_config['search_parameters']['max_evals'] = max_evals
     train_config['model_parameters']['modes']['training_mode'] = 'full'
     train_config['input_filepath'] = input_filepath
+    train_config['output_file_prefix'] = 'train1'
+    train_config['output_dir'] = output_dir
 
     # model parameters
     model_params = dict()
@@ -505,12 +494,6 @@ def train_eval_ensemble(region, region_type,
 
     train1_model_params = deepcopy(model_params)
     train2_model_params = deepcopy(model_params)
-
-    if mlflow_log:
-        train_config['output_filepath'] = 'train1_output.json'
-    else:
-        assert name_prefix is not None
-        train_config['output_filepath'] = name_prefix + '_train1_output.json'
 
     print("Performing M1 fit...")
     train_module_config = TrainingModuleConfig.parse_obj(train_config)
@@ -530,11 +513,8 @@ def train_eval_ensemble(region, region_type,
     test_config['model_parameters'].update(train_results['model_parameters'])
     test_config['model_parameters']['modes']['predict_mode'] = 'mean_predictions'
     test_config['input_filepath'] = input_filepath
-
-    if mlflow_log:
-        test_config['output_filepath'] = 'test1_output.json'
-    else:
-        test_config['output_filepath'] = name_prefix + '_test1_output.json'
+    test_config['output_file_prefix'] = 'test1'
+    test_config['output_dir'] = output_dir
 
     print("Evaluating M1 model...")
     test_module_config = ModelEvaluatorConfig.parse_obj(test_config)
@@ -542,16 +522,16 @@ def train_eval_ensemble(region, region_type,
     metrics_m1_test_losses = loss_json_to_dataframe(eval_results, 'test1')
     metrics['M1_losses'] = pd.concat([metrics_m1_train_losses, metrics_m1_test_losses], axis=0)
 
-    testMAPE = 0
-    testRMSLE = 0
+    test_mape = 0
+    test_rmsle = 0
     for metric in eval_results:
         if metric['metric_name'] == 'mape':
-            testMAPE += metric['value']
+            test_mape += metric['value']
         if metric['metric_name'] == 'rmsle':
-            testRMSLE += metric['value']
+            test_rmsle += metric['value']
 
-    metrics['test1_MAPE'] = testMAPE
-    metrics['test1_RMLSE'] = testRMSLE
+    metrics['test1_MAPE'] = test_mape
+    metrics['test1_RMLSE'] = test_rmsle
     metrics.update(parse_metrics(eval_results, 'test1'))
 
     final_train_config = deepcopy(default_train_config)
@@ -563,11 +543,8 @@ def train_eval_ensemble(region, region_type,
     final_train_config['search_parameters']['max_evals'] = max_evals
     final_train_config['model_parameters']['modes']['training_mode'] = 'full'
     final_train_config['input_filepath'] = input_filepath
-
-    if mlflow_log:
-        final_train_config['output_filepath'] = 'train2_output.json'
-    else:
-        final_train_config['output_filepath'] = name_prefix + '_train2_output.json'
+    final_train_config['output_file_prefix'] = 'train2'
+    final_train_config['output_dir'] = output_dir
 
     print("Performing M2 fit...")
     final_train_module_config = TrainingModuleConfig.parse_obj(final_train_config)
@@ -589,15 +566,12 @@ def train_eval_plot_ensemble(region, region_type,
                              default_train_config, default_test_config, default_forecast_config,
                              child_model_max_eval=10, ensemble_model_max_eval=10, data_source=None,
                              input_filepath=None, output_dir='', mlflow_log=False, mlflow_run_name=None):
-
     params_dict = dict()
-    metrics_dict = dict()
-    artifacts_dict = dict()
     dates = dict()
 
     name_prefix = " ".join(region[0])
 
-    #Persist the training/testing durations
+    # Persist the training/testing durations
     dates['train1_run_day'] = train1_run_day
     dates['train1_start_date'] = train1_start_date
     dates['train1_end_date'] = train1_end_date
@@ -641,7 +615,7 @@ def train_eval_plot_ensemble(region, region_type,
                                                                         max_evals=max_evals, data_source=data_source,
                                                                         input_filepath=input_filepath,
                                                                         mlflow_log=mlflow_log,
-                                                                        name_prefix=name_prefix)
+                                                                        name_prefix=name_prefix, output_dir=output_dir)
 
     print('forecast_config')
     print(default_forecast_config)
@@ -654,19 +628,6 @@ def train_eval_plot_ensemble(region, region_type,
                  test_run_day, test_start_date, test_end_date, train2_run_day, train2_start_date, train2_end_date,
                  forecast_run_day, forecast_start_date, forecast_end_date, default_forecast_config,
                  data_source=data_source, input_filepath=input_filepath, output_dir=output_dir, debug=True)
-   
-    if mlflow_log:
-        print("Logging to MLflow...")
-        with mlflow.start_run(run_name=mlflow_run_name):
-            mlflow.log_params(params)
-            mlflow.log_metrics(metrics)
-            mlflow.log_artifact(name_prefix+'_m1.png')
-            mlflow.log_artifact(name_prefix+'_m2.png')
-            mlflow.log_artifact(name_prefix+'_m3.png')
-            mlflow.log_artifact('train_config.json')
-            mlflow.log_artifact('train1_output.json')
-            mlflow.log_artifact('test1_output.json')
-            mlflow.log_artifact('train2_output.json')
 
     artifacts_dict = {
         'plot_M1_CARD': os.path.join(output_dir, 'm1.png'),
@@ -696,7 +657,6 @@ def train_eval_plot_ensemble_v1(region, region_type,
                                 default_train_config, default_test_config, default_forecast_config,
                                 train_period=14, test_period=7, max_evals=1000, data_source=None,
                                 input_filepath=None, output_dir='', mlflow_log=False, mlflow_run_name=None):
-
     params_dict = dict()
     metrics_dict = dict()
     artifacts_dict = dict()
@@ -764,15 +724,15 @@ def train_eval_plot_ensemble_v1(region, region_type,
                  test_run_day, test_start_date, test_end_date, train2_run_day, train2_start_date, train2_end_date,
                  forecast_run_day, forecast_start_date, forecast_end_date, default_forecast_config,
                  data_source=data_source, input_filepath=input_filepath, output_dir=output_dir, debug=True)
-   
+
     if mlflow_log:
         print("Logging to MLflow...")
         with mlflow.start_run(run_name=mlflow_run_name):
             mlflow.log_params(params)
             mlflow.log_metrics(metrics)
-            mlflow.log_artifact(name_prefix+'_m1.png')
-            mlflow.log_artifact(name_prefix+'_m2.png')
-            mlflow.log_artifact(name_prefix+'_m3.png')
+            mlflow.log_artifact(name_prefix + '_m1.png')
+            mlflow.log_artifact(name_prefix + '_m2.png')
+            mlflow.log_artifact(name_prefix + '_m3.png')
             mlflow.log_artifact('train_config.json')
             mlflow.log_artifact('train1_output.json')
             mlflow.log_artifact('test1_output.json')
@@ -800,38 +760,6 @@ def train_eval_plot_ensemble_v1(region, region_type,
 
     return params_dict, metrics, artifacts_dict, train1_params, train2_params
 
-
-def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
-
-    init_observations = get_observations_subset(df_actual, run_day, run_day)
-    init_observations_df = pd.DataFrame(columns=df_predictions.columns)
-    for col in init_observations_df.columns:
-        original_col = col.split('_')[0]
-        if original_col in init_observations:
-            init_observations_df.loc[:, col] = init_observations.loc[:, original_col]
-    init_observations_df.loc[:, 'date'] = init_observations.loc[:, 'index'].apply(lambda d: d.strftime('%-m/%-d/%-y'))
-    init_observations_df.fillna(0, inplace=True)
-    df_predictions = pd.concat([init_observations_df, df_predictions], axis=0, ignore_index=True)
-    return df_predictions
-
-
-def get_observations_subset(df_actual, start_date=None, end_date=None):
-
-    df_actual = df_actual.set_index('observation')
-    df_actual = df_actual.transpose().reset_index()
-    if start_date is not None:
-        start = df_actual.index[df_actual['index'] == start_date].tolist()[0]
-    else:
-        start = df_actual.index.min()
-    if end_date is not None:
-        end = df_actual.index[df_actual['index'] == end_date].tolist()[0]
-    else:
-        end = df_actual.index.max()
-    df_actual = df_actual[start: end + 1]
-    df_actual['index'] = pd.to_datetime(df_actual['index'])
-
-    return df_actual
-    
 
 def create_plots(region, region_type, train1_model_params, train2_model_params,
                  train1_run_day, train1_start_date, train1_end_date,
@@ -1267,46 +1195,3 @@ def plot(model_params, forecast_df, forecast_start_date, forecast_end_date, plot
     ax.legend()
 
     plt.savefig(plot_name)
-
-
-def plot_data(region, region_type, dir_name, dir_prefix='../notebooks',
-    data_source=None, data_path=None,
-    plot_config='plot_config.json', plot_name='default.png',
-    csv_name='csv_cnt_data.csv'):
-    with open(plot_config) as fin:
-        default_plot_config = json.load(fin)
-
-    plot_config = deepcopy(default_plot_config)
-
-    actual = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source,
-                                                           filepath=data_path, smooth=False)
-    actual.drop(columns=['region_name', 'region_type'], inplace=True)
-    actual = actual.set_index('observation').transpose().reset_index()
-    actual['index'] = pd.to_datetime(actual['index'])
-    actual = actual.loc[~ (actual.select_dtypes(include=['number']) == 0).all(axis='columns'), :]  # CHECK THIS
-    csv_path = os.path.join(dir_prefix, dir_name, csv_name)
-    actual.to_csv(csv_path, index=False)
-
-    plot_markers = plot_config['markers']
-    plot_colors = plot_config['colors']
-    plot_labels = plot_config['labels']
-    plot_variables = plot_config['variables']
-
-    fig, ax = plt.subplots(figsize=(16, 12))
-
-    for variable in plot_variables:
-        ax.plot(actual['index'], actual[variable], plot_markers['observed'],
-                color=plot_colors[variable], label=plot_labels[variable])
-
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=5))
-    ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-
-    plt.ylabel('No of People')
-    plt.xlabel('Time')
-    plt.xticks(rotation=45)
-    plt.legend()
-    plt.grid()
-
-    plot_path = os.path.join(dir_prefix, dir_name, plot_name)
-    plt.savefig(plot_path)

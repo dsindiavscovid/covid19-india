@@ -1,5 +1,4 @@
 import json
-import json
 import os
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -12,14 +11,12 @@ from configs.base_config import ForecastingModuleConfig
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
-from nb_utils import add_init_observations_to_predictions
-from nb_utils import get_observations_subset
-from nb_utils import plot_data
 from nb_utils import train_eval_plot_ensemble
 from publishers.mlflow_logging import get_previous_runs, log_to_mlflow
 from publishers.report_generation import create_report
-from utils.data_transformer_helper import flatten_train_loss_config, flatten_eval_loss_config, flatten
-from utils.plotting import m2_forecast_plots
+from utils.data_transformer_helper import flatten_train_loss_config, flatten_eval_loss_config, flatten, \
+    get_observations_subset, add_init_observations_to_predictions
+from utils.plotting import m2_forecast_plots, plot_data
 from utils.staffing import get_clean_staffing_ratio, compute_staffing_matrix
 
 
@@ -31,7 +28,7 @@ def create_session(session_name, user_name='guest'):
     dir_name = session_name + '_outputs'
     # Check if the directory exists
     # if yes, raise a warning; else create a new directory
-    path_prefix = '../notebooks'
+    path_prefix = '../outputs'
     output_dir = os.path.join(path_prefix, dir_name)
     if os.path.isdir(output_dir):
         print(f"{output_dir} already exists. Your logs might get overwritten.")
@@ -42,7 +39,7 @@ def create_session(session_name, user_name='guest'):
     current_session = ModelBuildingSession(session_name)
     current_session.set_param('output_dir', dir_name)
     current_session.set_param('experiment_name', 'SEIHRD_ENSEMBLE_V0')
-    current_session.set_param('run_name', 'run_name') # FIXME
+    current_session.set_param('run_name', session_name)
     current_session.set_param('model_class', 'homogeneous_ensemble')
     current_session.print_parameters()
     #TOFIX
@@ -60,7 +57,7 @@ class ModelBuildingSession:
     def __init__(self, sess_name):
         self.sess_name = sess_name
         self.params = dict()
-        self.model_params = None #Placeholder for trained model parameters
+        self.model_params = None  # Placeholder for trained model parameters
         self.load_default_configs()
         self.init_mandatory_params()
         self.init_config_params()
@@ -216,10 +213,10 @@ class ModelBuildingSession:
         data_source = self.params['data_source']
         data_path = self.params['data_filepath']
         output_dir_name = self.params['output_dir']
-        dir_prefix = '../notebooks'
+        dir_prefix = '../outputs'
 
-        plot_data(region, region_type, output_dir_name, dir_prefix, data_source=data_source, data_path=data_path, 
-                  plot_config='../notebooks/plot_config.json', plot_name=plot_fname, csv_name=csv_fname)
+        plot_data(region, region_type, output_dir_name, dir_prefix=dir_prefix, data_source=data_source,
+                  data_path=data_path, plot_name=plot_fname, csv_name=csv_fname)
         
 
     def setup_defaults(self):
@@ -295,7 +292,7 @@ class ModelBuildingSession:
         forecast_end_date = self.params['time_interval_config.forecast_end_date']
 
         name_prefix = self.params['region_name']
-        output_dir = os.path.join('../notebooks', self.params['output_dir'])
+        output_dir = os.path.join('../outputs', self.params['output_dir'])
 
         params, metrics, artifacts_dict, train1_params, train2_params = train_eval_plot_ensemble(region, region_type,
             train1_run_day, train1_start_date, train1_end_date,
@@ -327,8 +324,8 @@ class ModelBuildingSession:
         self.time_interval_config = params['time_interval_config']
 
         model_building_report = os.path.join(output_dir, 'model_building_report.md')
-        create_report(params, metrics, artifacts_dict, 
-                      template_path='publishers/template_v1.mustache', 
+        create_report(params, metrics, artifacts_dict,
+                      template_path='publishers/model_building_template_v1.mustache',
                       report_path=model_building_report)
 
         self.params_to_log.update(params)
@@ -403,7 +400,8 @@ class ModelBuildingSession:
             forecasting_output = ForecastingModule.from_config(forecast_module)
             output_dir = self.params['output_dir']
             artifact_name = 'forecast_' + str(planning_level) + '_' + str(r0_mult) + '.csv'
-            artifact_path = os.path.join('../notebooks', output_dir, artifact_name)
+            planning_outputs = os.path.join('../outputs', output_dir, 'planning_outputs')
+            artifact_path = os.path.join(planning_outputs, artifact_name)
             forecasting_output.to_csv(artifact_path, index=False)
 
             forecasting_output = forecasting_output.reset_index()
@@ -420,8 +418,6 @@ class ModelBuildingSession:
                                                                   forecast_run_day)
             df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'], format='%m/%d/%y')
 
-
-            planning_outputs = os.path.join('../notebooks', output_dir, 'planning_outputs')
             if not os.path.exists(planning_outputs):
                 os.mkdir(planning_outputs)
             m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_forecast_m2,
@@ -434,12 +430,12 @@ class ModelBuildingSession:
             'plot_M2_scenario_1_CARD': os.path.join(planning_outputs,f'{planning_level}_0.9_m2_forecast.png'),
             'plot_M2_scenario_2_CARD': os.path.join(planning_outputs,f'{planning_level}_1.1_m2_forecast.png'),
             'plot_M2_scenario_3_CARD': os.path.join(planning_outputs,f'{planning_level}_1.2_m2_forecast.png'),
-            'list_planning_output_forecast_file' : os.path.join(planning_outputs, f'{planning_level}_forecast.csv')
+            'planning_output_forecast_file' : os.path.join(planning_outputs, f'forecast_{planning_level}_1.csv')
         }
 
         # self.artifacts_dict.update(artifacts_dict)
 
-        planning_report = os.path.join('../notebooks', output_dir, 'planning_report.md')
+        planning_report = os.path.join('../outputs', output_dir, 'planning_report.md')
         create_report(params, metrics, artifacts_dict, 
                       template_path='publishers/planning_template_v1.mustache', 
                       report_path=planning_report)
@@ -485,7 +481,7 @@ class ModelBuildingSession:
                                  region_observations= observations,
                                  run_day = forecast_run_day, 
                                  start_date = forecast_start_date, 
-                                 end_date = forecast_end_date) 
+                                 end_date = forecast_end_date)
 
         planning_model_params = percentile_params[planning_level]
 
@@ -507,6 +503,7 @@ class ModelBuildingSession:
         return pd.read_csv(csv_fname)
     
     def log_session(self):
+        # TODO: Log comments and questions
         mandatory_params = self.mandatory_params['log_session']
         self.validate_params(mandatory_params)
 
@@ -532,3 +529,4 @@ class ModelBuildingSession:
 
         log_to_mlflow(self.params_to_log, self.metrics_to_log, self.artifacts_dict,
                       experiment_name=self.params['experiment_name'], run_name=self.params['run_name'])
+

@@ -1,4 +1,3 @@
-import json
 import os
 from copy import deepcopy
 
@@ -10,7 +9,6 @@ from matplotlib import pyplot as plt, dates as mdates
 from modules.data_fetcher_module import DataFetcherModule
 
 
-# TODO: Should this be in a plot config json
 plot_colors = {
     "confirmed": "C0",
     "recovered": "green",
@@ -38,43 +36,6 @@ def plot_vertical_lines(ax, vertical_lines):
             ax.axvline(x=pd.to_datetime(line['date']), ls=':', color=line['color'], label=line['label'])
 
 
-def plot_data(region, region_type, data_source=None, input_filepath=None, plot_config='plot_config.json',
-              plot_name='default.png'):
-
-    with open(plot_config) as fin:
-        default_plot_config = json.load(fin)
-
-    plot_config = deepcopy(default_plot_config)
-
-    actual = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source, smooth=False,
-                                                           filepath=input_filepath)
-    actual.drop(columns=['region_name', 'region_type'], inplace=True)
-    actual = actual.set_index('observation').transpose().reset_index()
-    actual['index'] = pd.to_datetime(actual['index'])
-    actual = actual.loc[~ (actual.select_dtypes(include=['number']) == 0).all(axis='columns'), :]
-
-    plot_markers = plot_config['markers']
-    plot_colors = plot_config['colors']
-    plot_labels = plot_config['labels']
-    plot_variables = plot_config['variables']
-
-    fig, ax = plt.subplots(figsize=(16, 12))
-
-    for variable in plot_variables:
-        ax.plot(actual['index'], actual[variable].values, plot_markers['observed'],
-                color=plot_colors[variable], label=plot_labels[variable])
-
-    plot_format(ax)
-
-    plt.ylabel('No of People')
-    plt.xlabel('Time')
-    plt.xticks(rotation=45)
-    plt.legend()
-    plt.grid()
-
-    plt.savefig(plot_name)
-
-
 def multivariate_case_count_plot(df_actual, df_smoothed=None, df_predictions_train=None, df_predictions_test=None,
                                  variables=None, column_label='Predicted mean', column_tag='mean', vertical_lines=None,
                                  title='', path=None):
@@ -97,8 +58,7 @@ def multivariate_case_count_plot(df_actual, df_smoothed=None, df_predictions_tra
 
     # By default, plot all variables
     if variables is None:
-        variables = [ForecastVariable.hospitalized.name, ForecastVariable.recovered.name,
-                     ForecastVariable.deceased.name, ForecastVariable.confirmed.name]
+        variables = [var.name for var in ForecastVariable.input_variables()]
 
     fig, ax = plt.subplots(figsize=(16, 12))
 
@@ -136,7 +96,7 @@ def multivariate_case_count_plot(df_actual, df_smoothed=None, df_predictions_tra
 
 def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_predictions_train=None,
                                     df_predictions_test=None, column_tags=None, vertical_lines=None, title='',
-                                    path=None, debug=False):
+                                    path=None, verbose=False):
     """Creates a plot for a single variable
 
     Args:
@@ -150,7 +110,7 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
             [{'date': date, 'color': color, 'label': label}]
         title (str, optional): plot title (default: '')
         path (str, optional): path to output file (default: None)
-        debug (bool, optional): if True, include additional plotting (uncertainty during training)
+        verbose (bool, optional): if True, include additional plotting (uncertainty during training)
 
     """
 
@@ -165,7 +125,7 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
 
     percentile_labels = []
 
-    if debug:
+    if verbose:
         if df_predictions_train is not None and column_tags is not None:
             for tag in column_tags:
                 column = '_'.join([variable, tag])
@@ -276,7 +236,7 @@ def pdf_cdf_plot(variable, case_counts, cdf, pdf=None, case_counts_pdf=None, use
 
 
 def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_test,
-             train1_start_date, test1_start_date, column_tags=None, variables=None, output_dir='', debug=False):
+             train1_start_date, test1_start_date, column_tags=None, variables=None, output_dir='', verbose=False):
     """Creates all M1 plots
 
     Args:
@@ -290,14 +250,13 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
         output_dir (str, optional): output directory path (default: '')
-        debug (bool, optional): if True, include additional plotting (uncertainty during training)
+        verbose (bool, optional): if True, include additional plotting (uncertainty during training)
 
     """
 
     # By default, plot all variables
     if variables is None:
-        variables = [ForecastVariable.hospitalized.name, ForecastVariable.recovered.name,
-                     ForecastVariable.deceased.name, ForecastVariable.confirmed.name]
+        variables = [var.name for var in ForecastVariable.input_variables()]
 
     # Train start and test start markers in plots
     vertical_lines = [
@@ -320,11 +279,11 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
                                         df_predictions_train=df_predictions_train,
                                         df_predictions_test=df_predictions_test, column_tags=column_tags,
                                         vertical_lines=vertical_lines, title=f'{region_name}: M1 fit - {variable}',
-                                        path=path, debug=debug)
+                                        path=path, verbose=verbose)
 
 
 def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_start_date, column_tags=None,
-             variables=None, output_dir='', debug=False):
+             variables=None, output_dir='', verbose=False):
     """Creates all M2 plots
 
     Args:
@@ -336,14 +295,13 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
         output_dir (str, optional): output directory path (default: '')
-        debug (bool, optional): if True, include additional plotting (uncertainty during training)
+        verbose (bool, optional): if True, include additional plotting (uncertainty during training)
 
     """
 
     # By default, plot all variables
     if variables is None:
-        variables = [ForecastVariable.hospitalized.name, ForecastVariable.recovered.name,
-                     ForecastVariable.deceased.name, ForecastVariable.confirmed.name]
+        variables = [var.name for var in ForecastVariable.input_variables()]
 
     # Train start and test start markers in plots
     vertical_lines = [{'date': train2_start_date, 'color': 'brown', 'label': 'Train starts'}]
@@ -362,12 +320,12 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_train=df_predictions_train, df_predictions_test=None,
                                         column_tags=column_tags, vertical_lines=vertical_lines,
-                                        title=f'{region_name}: M2 fit - {variable}', path=path, debug=debug)
+                                        title=f'{region_name}: M2 fit - {variable}', path=path, verbose=verbose)
 
 
 def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_forecast,
                       train2_start_date, forecast_start_date, column_tags=None, variables=None, output_dir='',
-                      debug=False, plot_name_prefix=None):
+                      verbose=False, plot_name_prefix=None):
     """Creates all M2 forecast plots
 
     Args:
@@ -380,15 +338,14 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
         output_dir (str, optional): output directory path (default: '')
-        debug (bool, optional): if True, include additional plotting (uncertainty during training)
+        verbose (bool, optional): if True, include additional plotting (uncertainty during training)
         plot_name_prefix (str, optional): prefix for plot name
 
     """
 
     # By default, plot all variables
     if variables is None:
-        variables = [ForecastVariable.hospitalized.name, ForecastVariable.recovered.name,
-                     ForecastVariable.deceased.name, ForecastVariable.confirmed.name]
+        variables = [var.name for var in ForecastVariable.input_variables()]
 
     # Train start and forecast start markers in plots
     vertical_lines = [
@@ -419,7 +376,7 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_test=df_predictions_forecast, column_tags=column_tags,
                                         vertical_lines=vertical_lines,
-                                        title=title, path=path, debug=debug)
+                                        title=title, path=path, verbose=verbose)
 
 
 def distribution_plots(trials, variable, output_dir=''):
@@ -442,3 +399,60 @@ def distribution_plots(trials, variable, output_dir=''):
 
     pdf_cdf_plot(variable, trials['case_counts'], trials['cdf'], case_counts_pdf=case_counts_pdf,
                  title=f'PDF and CDF for {variable}', path=os.path.join(output_dir, 'm2_distribution.png'))
+
+
+def plot_data(region, region_type, dir_name, variables=None, dir_prefix='../notebooks', data_source=None,
+              data_path=None, plot_name='default.png', csv_name='csv_cnt_data.csv'):
+
+    if variables is None:
+        variables = [var.name for var in ForecastVariable.input_variables()]
+
+    actual = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source,
+                                                           filepath=data_path, smooth=False)
+    actual.drop(columns=['region_name', 'region_type'], inplace=True)
+    actual = actual.set_index('observation').transpose().reset_index()
+    actual['index'] = pd.to_datetime(actual['index'])
+    actual = actual.loc[~ (actual.select_dtypes(include=['number']) == 0).all(axis='columns'), :]
+    csv_path = os.path.join(dir_prefix, dir_name, csv_name)
+    actual.to_csv(csv_path, index=False)
+
+    fig, ax = plt.subplots(figsize=(16, 12))
+
+    for variable in variables:
+        ax.plot(actual['index'], actual[variable], 'o-',
+                color=plot_colors[variable], label=plot_labels[variable])
+
+    plot_format(ax)
+
+    plt.title(region)
+    plt.ylabel('Case counts')
+    plt.xlabel('Time')
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.grid()
+
+    plot_path = os.path.join(dir_prefix, dir_name, plot_name)
+    plt.savefig(plot_path)
+
+
+def plot_data_new(region_name, df_actual, variables=None, plot_path=''):
+
+    if variables is None:
+        variables = [var.name for var in ForecastVariable.input_variables()]
+
+    fig, ax = plt.subplots(figsize=(16, 12))
+
+    for variable in variables:
+        ax.plot(df_actual['index'], df_actual[variable], 'o-',
+                color=plot_colors[variable], label=plot_labels[variable])
+
+    plot_format(ax)
+
+    plt.title(region_name)
+    plt.ylabel('Case counts')
+    plt.xlabel('Time')
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.grid()
+
+    plt.savefig(plot_path)

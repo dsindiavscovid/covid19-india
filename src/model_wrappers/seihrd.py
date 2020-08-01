@@ -48,7 +48,7 @@ class SEIHRD(ModelWrapperBase):
                                 train_start_date=train_start_date, train_end_date=train_end_date,
                                 loss_function=train_loss_function)
             for k, v in search_space.items():
-                search_space[k] = hp.uniform(k, v[0], v[1])
+                search_space[k] = hp.uniform(k, v["low"], v["high"])
             result = hyperparam_tuning(objective, search_space,
                                        search_parameters.get("max_evals", 100))
             latent_params = self.get_latent_params(region_metadata, region_observations, run_day,
@@ -114,7 +114,7 @@ class SEIHRD(ModelWrapperBase):
             initF = recovered_dataset[run_day] + deceased_dataset[run_day]
         else:
             pick_day = run_day
-            while (pick_day not in self.model_parameters.get('LatentEbyCRatio')):
+            while pick_day not in self.model_parameters.get('LatentEbyCRatio'):
                 pick_day = (datetime.strptime(pick_day, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
             initE = confirmed_dataset[run_day] * self.model_parameters.get('LatentEbyCRatio').get(pick_day)
             initI = confirmed_dataset[run_day] * self.model_parameters.get('LatentIbyCRatio').get(pick_day)
@@ -161,9 +161,9 @@ class SEIHRD(ModelWrapperBase):
         day0 = dates[0]
         for date in dates:
             t = (date - day0).days
-            while (modelT[count] <= t):
+            while modelT[count] <= t:
                 count += 1
-                if (count == len(modelT)):
+                if count == len(modelT):
                     print("Last prediction reached - Number of predictions less than required")
                     model_predictions.append(modelI[count - 1])
                     model_predictions_df = pd.DataFrame()

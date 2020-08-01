@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from entities.forecast_variables import ForecastVariable
 
@@ -51,7 +52,7 @@ def uncertainty_dict_to_df(percentiles_predictions):
         df_prediction = percentiles_predictions[decile]['df_prediction']
         cols = list(df_prediction.columns)
         for col in cols:
-            columns.append(col+'_{}'.format(decile))
+            columns.append(col + '_{}'.format(decile))
 
     df_output = pd.DataFrame(columns=columns)
 
@@ -63,8 +64,12 @@ def uncertainty_dict_to_df(percentiles_predictions):
         df_prediction = percentiles_predictions[decile]['df_prediction']
         cols = list(df_prediction.columns)
         for col in cols:
-            df_output.loc[:, col+'_{}'.format(decile)] = df_prediction[col]
+            df_output.loc[:, col + '_{}'.format(decile)] = df_prediction[col]
 
     df_output.reset_index(inplace=True)
 
     return df_output
+
+
+def get_weights(beta, losses):
+    return {idx: np.exp(-beta * loss) for idx, loss in losses.items()}

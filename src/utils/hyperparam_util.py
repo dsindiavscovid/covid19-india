@@ -16,6 +16,7 @@ def hyperparam_tuning(func, search_space, max_evals, algo=tpe.suggest):
               }
     return result
 
+
 def hyperparam_tuning_ensemble(func, search_space, max_evals, algo=tpe.suggest):
     trials = Trials()
     best = fmin(func, search_space, algo=algo, max_evals=max_evals, trials=trials)

@@ -8,4 +8,3 @@ class MetricName(str, enum.Enum):
     rmse_delta = "rmse_delta"
     rmsle_delta = "rmsle_delta"
     mape_delta = "mape_delta"
-    

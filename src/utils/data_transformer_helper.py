@@ -73,14 +73,14 @@ def convert_to_jhu_format(predictions_df, region_type, region_name):
     return preddf
 
 
-def convert_to_old_required_format(self, run_day, predictions_df, region_type, region_name):
+def convert_to_old_required_format(run_day, predictions_df, region_type, region_name, mape, model):
 
     preddf = predictions_df.set_index('date')
     columns = [ForecastVariable.active.name, ForecastVariable.hospitalized.name,
                ForecastVariable.recovered.name, ForecastVariable.deceased.name, ForecastVariable.confirmed.name]
     for col in columns:
         preddf = preddf.rename(columns={col: col + '_mean'})
-    error = min(1, float(self._model_parameters['MAPE']) / 100)
+    error = min(1, float(mape) / 100)
     for col in columns:
         col_mean = col + '_mean'
         preddf[col + '_min'] = preddf[col_mean] * (1 - error)
@@ -89,7 +89,7 @@ def convert_to_old_required_format(self, run_day, predictions_df, region_type, r
     preddf.insert(0, 'run_day', run_day)
     preddf.insert(1, 'Region Type', region_type)
     preddf.insert(2, 'Region', " ".join(region_name))
-    preddf.insert(3, 'Model', self._model.__class__.__name__)
+    preddf.insert(3, 'Model', model)
     preddf.insert(4, 'Error', "MAPE")
     preddf.insert(5, "Error Value", error * 100)
 
@@ -140,3 +140,36 @@ def flatten_eval_loss_config(config):
         items.append((variable['variable']+'_weight', variable['weight']))
     return dict(items)
 
+
+def get_observations_subset(df_actual, start_date=None, end_date=None):
+    print("get_subset")
+    print(df_actual)
+    print(df_actual.columns)
+    df_actual = df_actual.set_index('observation')
+    df_actual = df_actual.transpose().reset_index()
+    if start_date is not None:
+        start = df_actual.index[df_actual['index'] == start_date].tolist()[0]
+    else:
+        start = df_actual.index.min()
+    if end_date is not None:
+        end = df_actual.index[df_actual['index'] == end_date].tolist()[0]
+    else:
+        end = df_actual.index.max()
+    df_actual = df_actual[start: end + 1]
+    df_actual['index'] = pd.to_datetime(df_actual['index'])
+
+    return df_actual
+
+
+def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
+
+    init_observations = get_observations_subset(df_actual, run_day, run_day)
+    init_observations_df = pd.DataFrame(columns=df_predictions.columns)
+    for col in init_observations_df.columns:
+        original_col = col.split('_')[0]
+        if original_col in init_observations:
+            init_observations_df.loc[:, col] = init_observations.loc[:, original_col]
+    init_observations_df.loc[:, 'date'] = init_observations.loc[:, 'index'].apply(lambda d: d.strftime('%-m/%-d/%-y'))
+    init_observations_df.fillna(0, inplace=True)
+    df_predictions = pd.concat([init_observations_df, df_predictions], axis=0, ignore_index=True)
+    return df_predictions

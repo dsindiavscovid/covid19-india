@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict
 
 from pydantic import BaseModel
 
@@ -13,5 +13,5 @@ class VariableWeight(BaseModel):
 
 class LossFunction(BaseModel):
     metric_name: MetricName
-    variable_weights: List[VariableWeight]
+    weights: Dict[ForecastVariable, int]
     value: float = 0.0

@@ -1,17 +1,16 @@
-import pandas as pd
-import numpy as np
-
 from copy import deepcopy
 from datetime import timedelta, datetime
 from functools import reduce, partial
-from hyperopt import hp
 
+import numpy as np
+import pandas as pd
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
-from model_wrappers.base import ModelWrapperBase
+from hyperopt import hp
 from model_wrappers import model_factory as model_factory_alias
-from utils.ensemble_util import get_weighted_predictions, create_trials_dataframe, uncertainty_dict_to_df
+from model_wrappers.base import ModelWrapperBase
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
+from utils.ensemble_util import get_weighted_predictions, create_trials_dataframe, uncertainty_dict_to_df, get_weights
 from utils.hyperparam_util import hyperparam_tuning
 from utils.loss_util import evaluate_for_forecast
 
@@ -19,7 +18,6 @@ from utils.loss_util import evaluate_for_forecast
 class HeterogeneousEnsemble(ModelWrapperBase):
 
     def __init__(self, model_parameters):
-        # TODO: Shift to helper function
         self.model_parameters = model_parameters
         self.models = deepcopy(model_parameters['constituent_models'])
         self.losses = deepcopy(model_parameters['constituent_model_losses'])
@@ -30,6 +28,9 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             self.weights = None
 
         # Initialize each constituent model
+        self._initialize_constituent_models()
+
+    def _initialize_constituent_models(self):
         for idx in self.models:
             constituent_model = self.models[idx]
             constituent_model_class = constituent_model['model_class']
@@ -46,13 +47,6 @@ class HeterogeneousEnsemble(ModelWrapperBase):
     def is_black_box(self):
         return True
 
-    def _get_weights(self):
-        beta = self.model_parameters['beta']
-        if self.weights is None:
-            return {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
-        else:
-            return deepcopy(self.weights)
-
     def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,
               train_end_date: str, search_space: dict, search_parameters: dict, train_loss_function: LossFunction):
         result = {}
@@ -64,7 +58,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
                                 train_start_date=train_start_date, train_end_date=train_end_date,
                                 loss_function=train_loss_function, precomputed_pred=precomputed_pred)
             for k, v in search_space.items():
-                search_space[k] = hp.uniform(k, v[0], v[1])
+                search_space[k] = hp.uniform(k, v["low"], v["high"])
             result = hyperparam_tuning(objective, search_space,
                                        search_parameters.get("max_evals", 100))
         model_params = self.model_parameters
@@ -117,6 +111,18 @@ class HeterogeneousEnsemble(ModelWrapperBase):
     
     def predict_best_fit(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                          end_date: str):
+        """Gets predictions using constituent model with best fit on train period
+
+        Args:
+            region_metadata (dict): region metadata
+            region_observations (pd.Dataframe): dataframe of case counts
+            run_day (str): prediction run day
+            start_date (str): prediction start date
+            end_date (str): prediction end date
+
+        Returns:
+            pd.DataFrame: predictions
+        """
         
         best_loss_idx = min(self.losses, key=self.losses.get)
         best_fit_model = self.models[best_loss_idx]
@@ -153,7 +159,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         # Calculate weights for constituent models as exp(-beta*loss)
         if self.weights is None or is_tuning:
-            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+            weights = get_weights(beta, self.losses)
         else:
             weights = deepcopy(self.weights)
        
@@ -169,7 +175,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         return mean_predictions_df
     
     # Helper function to get the model indexes
-    def _get_index_for_percentile_helper(self, column_of_interest, date_of_interest, tolerance, percentiles,
+    def _get_index_for_percentile_helper(self, variable_of_interest, date_of_interest, tolerance, percentiles,
                                          region_metadata, region_observations, run_day, start_date, end_date):
 
         # Get predictions, mean predictions and weighted predictions
@@ -177,14 +183,14 @@ class HeterogeneousEnsemble(ModelWrapperBase):
                                                         run_day, start_date, end_date)
 
         # Get predictions for a specific column on date of interest
-        trials_df = create_trials_dataframe(predictions_df_dict, column_of_interest)
+        trials_df = create_trials_dataframe(predictions_df_dict, variable_of_interest)
         try:
             predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
         except KeyError:
             raise Exception("The planning date is not in the range of predicted dates")
         beta = self.model_parameters['beta']
         if self.weights is None:
-            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+            weights = get_weights(beta, self.losses)
         else:
             weights = deepcopy(self.weights)
         df = pd.DataFrame.from_dict(weights, orient='index', columns=['weight'])
@@ -221,17 +227,17 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         # Unpack uncertainty parameters
         uncertainty_params = self.model_parameters['uncertainty_parameters']
         date_of_interest = uncertainty_params['date_of_interest']
-        column_of_interest = uncertainty_params['column_of_interest']
+        variable_of_interest = uncertainty_params['variable_of_interest']
         include_mean = uncertainty_params['include_mean']
         percentiles = uncertainty_params['percentiles']
-        ci = uncertainty_params['ci']
+        ci = uncertainty_params['confidence_interval_sizes']
         confidence_intervals = []
         for c in ci:
             confidence_intervals.extend([50 - c/2, 50 + c/2])
         tolerance = uncertainty_params['tolerance']
 
         percentiles_dict, predictions_df_dict = self._get_index_for_percentile_helper(
-            column_of_interest, date_of_interest, tolerance, percentiles+confidence_intervals,
+            variable_of_interest, date_of_interest, tolerance, percentiles+confidence_intervals,
             region_metadata, region_observations, run_day, start_date, end_date)
 
         # Create dictionary of dataframes for percentiles
@@ -253,10 +259,10 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         return percentiles_predictions
     
-    def get_params_for_percentiles(self, column_of_interest, date_of_interest, tolerance, percentiles,
+    def get_params_for_percentiles(self, variable_of_interest, date_of_interest, tolerance, percentiles,
                                    region_metadata, region_observations, run_day, start_date, end_date):
         
-        percentiles_dict, _ = self._get_index_for_percentile_helper(column_of_interest, date_of_interest, tolerance,
+        percentiles_dict, _ = self._get_index_for_percentile_helper(variable_of_interest, date_of_interest, tolerance,
                                                                     percentiles, region_metadata, region_observations, 
                                                                     run_day, start_date, end_date)
         return_dict = dict()
@@ -267,24 +273,36 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
     def get_trials_distribution(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
                                 start_date: str, end_date: str):
+        """Get trials and distribution for a given column and date
+
+        Args:
+            region_metadata (dict): region metadata
+            region_observations (pd.DataFrame): dataframe of case counts
+            run_day (str): prediction run day
+            start_date (str): prediction start date
+            end_date (str): prediction end date
+
+        Returns:
+            pd.DataFrame: dataframe with columns ['case_counts', 'weight', 'pdf', 'cdf']
+        """
         # Unpack uncertainty parameters
         uncertainty_params = self.model_parameters['uncertainty_parameters']
         date_of_interest = uncertainty_params['date_of_interest']
-        column_of_interest = uncertainty_params['column_of_interest']
+        variable_of_interest = uncertainty_params['variable_of_interest']
 
         # Get predictions, mean predictions and weighted predictions
         predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
                                                         run_day, start_date, end_date)
 
         # Get predictions for a specific column on date of interest
-        trials_df = create_trials_dataframe(predictions_df_dict, column_of_interest)
+        trials_df = create_trials_dataframe(predictions_df_dict, variable_of_interest)
         try:
             predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
         except KeyError:
             raise Exception("The planning date is not in the range of predicted dates")
         beta = self.model_parameters['beta']
         if self.weights is None:
-            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+            weights = get_weights(beta, self.losses)
         else:
             weights = deepcopy(self.weights)
         df = pd.DataFrame.from_dict(weights, orient='index', columns=['weight'])

@@ -1,18 +1,20 @@
-import mlflow
 import datetime
-import pandas as pd
 
+import mlflow
+import pandas as pd
+from utils.util import make_clickable
 
 TRACKING_URL = "http://ec2-54-175-207-176.compute-1.amazonaws.com"
 
 
-def log_to_mlflow(params, metrics, artifact_dict, experiment_name="default", run_name=None):
+def log_to_mlflow(params, metrics, artifact_dict, tags=None, experiment_name="default", run_name=None):
     """Logs metrics, parameters and artifacts to MLflow
 
     Args:
         params (dict of {str: str}): input parameters to the model
         metrics (dict of {str: numeric}): metrics output from the model
         artifact_dict (dict): file paths of artifacts
+        tags ():
         experiment_name (str): name of the MLflow experiment (default: "default")
         run_name (str): name of the MLflow run (default: None)
 
@@ -26,6 +28,8 @@ def log_to_mlflow(params, metrics, artifact_dict, experiment_name="default", run
         mlflow.log_metrics(metrics)
         for artifact, path in artifact_dict.items():
             mlflow.log_artifact(path)
+        if tags is not None:
+            mlflow.set_tags(tags)
 
 
 def get_previous_runs(experiment_name, region, interval=0):
@@ -64,5 +68,7 @@ def get_previous_runs(experiment_name, region, interval=0):
         {'Published on': runs_df['start_time'], 'Run name': runs_df['tags.mlflow.runName'], 'Link to run': links})
     links_df['Published on'] = links_df['Published on'].apply(lambda x: x.date())
     links_df.index += 1
+    links_df = links_df.style.format({'Link to run': make_clickable})
 
     return links_df
+
