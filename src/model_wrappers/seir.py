@@ -1,11 +1,10 @@
-import pandas as pd
-
-from hyperopt import hp
 from datetime import timedelta, datetime
 from functools import reduce, partial
 
+import pandas as pd
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
+from hyperopt import hp
 from model_wrappers.base import ModelWrapperBase
 from seirsplus.models import *
 from utils.hyperparam_util import hyperparam_tuning
@@ -41,7 +40,8 @@ class SEIR(ModelWrapperBase):
     def is_black_box(self):
         return True
 
-    def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str, train_end_date: str,
+    def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,
+              train_end_date: str,
               search_space: dict, search_parameters: dict, train_loss_function: LossFunction):
         result = {}
         if self.is_black_box():

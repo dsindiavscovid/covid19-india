@@ -1,10 +1,10 @@
+import pprint
+
 import chevron
 import pandas as pd
-import pprint
 
 
 def create_report(params, metrics, artifact_list, template_path='template.mustache', report_path='report.md'):
-
     params = {'_'.join(['params', k]): v for k, v in params.items()}
     metrics = {'_'.join(['metrics', k]): v for k, v in metrics.items()}
     artifact_list = {'_'.join(['artifact_list', k]): v for k, v in artifact_list.items()}

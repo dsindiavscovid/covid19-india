@@ -1,7 +1,6 @@
-import pandas as pd
-
 from functools import lru_cache
 
+import pandas as pd
 from data_fetchers.data_fetcher_base import DataFetcherBase
 
 
@@ -39,4 +38,3 @@ class DirectCSV(DataFetcherBase):
         region_df = observations_df[
             (observations_df["region_name"] == region_name) & (observations_df["region_type"] == region_type)]
         return region_df
-

@@ -1,7 +1,6 @@
-import pandas as pd
-
 import abc
 
+import pandas as pd
 from entities.loss_function import LossFunction
 
 ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})

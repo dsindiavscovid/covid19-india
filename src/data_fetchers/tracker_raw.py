@@ -3,7 +3,6 @@ from functools import lru_cache
 
 import numpy as np
 import pandas as pd
-
 from data_fetchers.data_fetcher_base import DataFetcherBase
 from data_fetchers.data_fetcher_utils import get_raw_data_dict
 

@@ -1,6 +1,3 @@
-import json
-import os
-
 from configs.base_config import ModelEvaluatorConfig
 from entities.model_class import ModelClass
 from model_wrappers.model_factory import ModelFactory

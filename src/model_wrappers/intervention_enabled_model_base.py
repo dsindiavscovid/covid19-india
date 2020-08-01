@@ -1,9 +1,9 @@
-import pandas as pd
+import abc
 
+import pandas as pd
 from entities.intervention_variable import InterventionVariable, InputType
 from entities.loss_function import LossFunction
 from model_wrappers.base import ModelWrapperBase
-import abc
 
 
 class InterventionEnabledModelBase(ModelWrapperBase):

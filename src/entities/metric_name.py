@@ -1,5 +1,6 @@
 import enum
 
+
 @enum.unique
 class MetricName(str, enum.Enum):
     rmse = "rmse"

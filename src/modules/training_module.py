@@ -40,11 +40,12 @@ class TrainingModule(object):
                                                    config.input_filepath)
 
         if not ("modes" in config.model_parameters.keys() and config.model_parameters['modes'][
-                'training_mode'] == 'constituent_models'):
+            'training_mode'] == 'constituent_models'):
             config.model_parameters.update(
                 results["model_parameters"])  # updating model parameters with best params found above
             model_evaluator = ModelEvaluator(config.model_class, config.model_parameters)
-            run_day = (datetime.strptime(config.train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
+            run_day = (datetime.strptime(config.train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime(
+                "%-m/%-d/%y")
             results["train_metric_results"] = model_evaluator.evaluate_for_region(config.data_source,
                                                                                   config.region_type,
                                                                                   config.region_name, run_day,

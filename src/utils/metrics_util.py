@@ -1,6 +1,7 @@
-from sklearn.metrics import mean_squared_error, mean_squared_log_error
 import math
+
 import numpy as np
+from sklearn.metrics import mean_squared_error, mean_squared_log_error
 
 
 def mean_absolute_percentage_error(y_true, y_pred):
@@ -13,22 +14,22 @@ def rmse(y_true, y_pred):
 
 
 def rmse_delta(y_true, y_pred):
-    y_true_delta = [y_true[i] - y_true[i-1] for i in range(1, len(y_true))]
-    y_pred_delta = [y_pred[i] - y_pred[i-1] for i in range(1, len(y_pred))]
+    y_true_delta = [y_true[i] - y_true[i - 1] for i in range(1, len(y_true))]
+    y_pred_delta = [y_pred[i] - y_pred[i - 1] for i in range(1, len(y_pred))]
     mse = mean_squared_error(y_true_delta, y_pred_delta)
     return math.sqrt(mse)
 
 
 def rmsle(y_true, y_pred):
-    y_true_delta = [y_true[i] - y_true[i-1] for i in range(1, len(y_true))]
-    y_pred_delta = [y_pred[i] - y_pred[i-1] for i in range(1, len(y_pred))]
+    y_true_delta = [y_true[i] - y_true[i - 1] for i in range(1, len(y_true))]
+    y_pred_delta = [y_pred[i] - y_pred[i - 1] for i in range(1, len(y_pred))]
     msle = mean_squared_log_error(y_true_delta, y_pred_delta)
     return math.sqrt(msle)
 
 
 def rmsle_delta(y_true, y_pred):
-    y_true_delta = [y_true[i] - y_true[i-1] for i in range(1, len(y_true))]
-    y_pred_delta = [y_pred[i] - y_pred[i-1] for i in range(1, len(y_pred))]
+    y_true_delta = [y_true[i] - y_true[i - 1] for i in range(1, len(y_true))]
+    y_pred_delta = [y_pred[i] - y_pred[i - 1] for i in range(1, len(y_pred))]
     msle = mean_squared_log_error(y_true_delta, y_pred_delta)
     return math.sqrt(msle)
 
@@ -43,8 +44,8 @@ def mape(y_true, y_pred):
 
 
 def mape_delta(y_true, y_pred):
-    y_true_delta = [y_true[i] - y_true[i-1] for i in range(1, len(y_true))]
-    y_pred_delta = [y_pred[i] - y_pred[i-1] for i in range(1, len(y_pred))]
+    y_true_delta = [y_true[i] - y_true[i - 1] for i in range(1, len(y_true))]
+    y_pred_delta = [y_pred[i] - y_pred[i - 1] for i in range(1, len(y_pred))]
     mape_value = 0
     for i in range(len(y_pred_delta)):
         if not y_true_delta[i] == 0:

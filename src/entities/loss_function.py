@@ -1,9 +1,8 @@
 from typing import Dict
 
-from pydantic import BaseModel
-
 from entities.forecast_variables import ForecastVariable
 from entities.metric_name import MetricName
+from pydantic import BaseModel
 
 
 class VariableWeight(BaseModel):

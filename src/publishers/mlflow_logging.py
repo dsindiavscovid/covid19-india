@@ -71,4 +71,3 @@ def get_previous_runs(experiment_name, region, interval=0):
     links_df = links_df.style.format({'Link to run': make_clickable})
 
     return links_df
-

@@ -2,7 +2,6 @@
 Plotting module
 """
 
-import os
 from copy import deepcopy
 
 import pandas as pd

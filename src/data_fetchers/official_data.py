@@ -72,7 +72,7 @@ def get_athena_dataframes(pyathena_rc_path=None):
     for table in tables_list:
         data_frames[table] = cursor.execute(
             'SELECT * FROM {}'.format(table)).as_pandas()
-    
+
     return data_frames
 
 

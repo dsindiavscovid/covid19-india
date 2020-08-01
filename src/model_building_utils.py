@@ -421,8 +421,8 @@ class ModelBuildingSession:
             if not os.path.exists(planning_outputs):
                 os.mkdir(planning_outputs)
             m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_forecast_m2,
-                  train2_start_date, forecast_start_date, column_tags=['mean'], output_dir=planning_outputs,
-                  debug=False, plot_name_prefix = str(planning_level) + '_' + str(r0_mult))
+                              train2_start_date, forecast_start_date, column_tags=['mean'], output_dir=planning_outputs,
+                              debug=False, scenario=str(planning_level) + '_' + str(r0_mult))
 
         
         artifacts_dict = {

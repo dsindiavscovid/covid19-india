@@ -25,8 +25,8 @@ def hyperparam_tuning_ensemble(func, search_space, max_evals, algo=tpe.suggest):
         temp_params = dict()
         for key in trial['misc']['vals']:
             temp_params[key] = trial['misc']['vals'][key][0]
-            
+
         trial_list.append((temp_params, trial['result']['loss']))
-    trial_list = sorted(trial_list, key = lambda x: x[1])
-        
+    trial_list = sorted(trial_list, key=lambda x: x[1])
+
     return trial_list

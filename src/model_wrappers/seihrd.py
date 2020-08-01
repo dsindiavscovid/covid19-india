@@ -1,12 +1,11 @@
-import numpy as np
-import pandas as pd
-
 from datetime import timedelta, datetime
 from functools import reduce, partial
-from hyperopt import hp
 
+import numpy as np
+import pandas as pd
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
+from hyperopt import hp
 from model_wrappers.base import ModelWrapperBase
 from seirsplus.models import *
 from utils.hyperparam_util import hyperparam_tuning
@@ -102,9 +101,9 @@ class SEIHRD(ModelWrapperBase):
         deceased_dataset = \
             region_observations[region_observations.observation == ForecastVariable.deceased.name].iloc[0]
         hospitalized_dataset = \
-            region_observations[region_observations.observation == ForecastVariable.hospitalized.name].iloc[0]       
+            region_observations[region_observations.observation == ForecastVariable.hospitalized.name].iloc[0]
         initN = region_metadata.get("population")
-        
+
         if self._is_tuning:
             initE = confirmed_dataset[run_day] * self.model_parameters.get('EbyCRatio')
             initI = confirmed_dataset[run_day] * self.model_parameters.get('IbyCRatio')
@@ -122,7 +121,7 @@ class SEIHRD(ModelWrapperBase):
             initR = confirmed_dataset[run_day]
             initH = hospitalized_dataset[run_day]
             initF = recovered_dataset[run_day] + deceased_dataset[run_day]
-      
+
         estimator = SEIRSModel(beta=init_beta, sigma=init_sigma, gamma=init_gamma, initN=initN, initI=initI,
                                initE=initE, initR=initR)
         estimator.run(T=n_days, verbose=False)
@@ -136,20 +135,28 @@ class SEIHRD(ModelWrapperBase):
         numH[0] = initH
 
         for i in range(1, num_steps):
-            numF[i] = numF[i-1] + self.model_parameters["F_hospitalization"] * numH[i-1]
+            numF[i] = numF[i - 1] + self.model_parameters["F_hospitalization"] * numH[i - 1]
             numH[i] = estimator.numR[i] - numF[i]
 
-        recovered_ts = self.alignTimeSeries(numF*(1 - self.model_parameters["F_fatalities"]), estimator.tseries, run_day, n_days, ForecastVariable.recovered.name)
-        fatalities_ts = self.alignTimeSeries(numF*self.model_parameters["F_fatalities"], estimator.tseries, run_day, n_days, ForecastVariable.deceased.name)
-        hospitalized_ts = self.alignTimeSeries(numH, estimator.tseries, run_day, n_days, ForecastVariable.hospitalized.name)
-        icu_ts = self.alignTimeSeries(numH*self.model_parameters["F_icu"], estimator.tseries, run_day, n_days, ForecastVariable.icu.name)
+        recovered_ts = self.alignTimeSeries(numF * (1 - self.model_parameters["F_fatalities"]), estimator.tseries,
+                                            run_day, n_days, ForecastVariable.recovered.name)
+        fatalities_ts = self.alignTimeSeries(numF * self.model_parameters["F_fatalities"], estimator.tseries, run_day,
+                                             n_days, ForecastVariable.deceased.name)
+        hospitalized_ts = self.alignTimeSeries(numH, estimator.tseries, run_day, n_days,
+                                               ForecastVariable.hospitalized.name)
+        icu_ts = self.alignTimeSeries(numH * self.model_parameters["F_icu"], estimator.tseries, run_day, n_days,
+                                      ForecastVariable.icu.name)
         active_ts = self.alignTimeSeries(numH, estimator.tseries, run_day, n_days, ForecastVariable.active.name)
-        confirmed_ts = self.alignTimeSeries(numH + numF, estimator.tseries, run_day, n_days, ForecastVariable.confirmed.name)
-        exposed_ts = self.alignTimeSeries(estimator.numE, estimator.tseries, run_day, n_days, ForecastVariable.exposed.name)
-        infected_ts = self.alignTimeSeries(estimator.numI, estimator.tseries, run_day, n_days, ForecastVariable.infected.name)
+        confirmed_ts = self.alignTimeSeries(numH + numF, estimator.tseries, run_day, n_days,
+                                            ForecastVariable.confirmed.name)
+        exposed_ts = self.alignTimeSeries(estimator.numE, estimator.tseries, run_day, n_days,
+                                          ForecastVariable.exposed.name)
+        infected_ts = self.alignTimeSeries(estimator.numI, estimator.tseries, run_day, n_days,
+                                           ForecastVariable.infected.name)
         final_ts = self.alignTimeSeries(numF, estimator.tseries, run_day, n_days, ForecastVariable.final.name)
 
-        data_frames = [exposed_ts, icu_ts, recovered_ts, fatalities_ts, confirmed_ts, hospitalized_ts, active_ts, infected_ts, final_ts]
+        data_frames = [exposed_ts, icu_ts, recovered_ts, fatalities_ts, confirmed_ts, hospitalized_ts, active_ts,
+                       infected_ts, final_ts]
         result = reduce(lambda left, right: pd.merge(left, right, on=['date'], how='inner'), data_frames)
         result = result.dropna()
         return result

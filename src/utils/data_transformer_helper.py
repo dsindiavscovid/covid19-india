@@ -2,7 +2,6 @@ import collections.abc
 
 import pandas as pd
 import pydantic
-
 from entities.forecast_variables import ForecastVariable
 
 
@@ -75,7 +74,6 @@ def convert_to_jhu_format(predictions_df, region_type, region_name):
 
 
 def convert_to_old_required_format(run_day, predictions_df, region_type, region_name, mape, model):
-
     preddf = predictions_df.set_index('date')
     columns = [ForecastVariable.active.name, ForecastVariable.hospitalized.name,
                ForecastVariable.recovered.name, ForecastVariable.deceased.name, ForecastVariable.confirmed.name]
@@ -129,7 +127,7 @@ def flatten(d, parent_key='', sep='_'):
 def flatten_train_loss_config(config):
     items = [('metric_name', config['metric_name'])]
     for variable in config['variable_weights']:
-        items.append((variable['variable']+'_weight', variable['weight']))
+        items.append((variable['variable'] + '_weight', variable['weight']))
     return dict(items)
 
 
@@ -137,8 +135,8 @@ def flatten_eval_loss_config(config):
     items = []
     for loss in config:
         variable = loss['variable_weights'][0]
-        items.append((variable['variable']+'_metric_name', loss['metric_name']))
-        items.append((variable['variable']+'_weight', variable['weight']))
+        items.append((variable['variable'] + '_metric_name', loss['metric_name']))
+        items.append((variable['variable'] + '_weight', variable['weight']))
     return dict(items)
 
 
@@ -161,7 +159,6 @@ def get_observations_subset(df_actual, start_date=None, end_date=None):
 
 
 def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
-
     init_observations = get_observations_subset(df_actual, run_day, run_day)
     init_observations_df = pd.DataFrame(columns=df_predictions.columns)
     for col in init_observations_df.columns:

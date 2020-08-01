@@ -2,7 +2,6 @@ from copy import deepcopy
 from datetime import timedelta, datetime
 from functools import reduce, partial
 
-import numpy as np
 import pandas as pd
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
@@ -108,7 +107,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             predictions_df = model.predict(region_metadata, region_observations, run_day, start_date, end_date)
             predictions_df_dict[idx] = predictions_df.set_index("date")
         return predictions_df_dict
-    
+
     def predict_best_fit(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                          end_date: str):
         """Gets predictions using constituent model with best fit on train period
@@ -123,7 +122,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         Returns:
             pd.DataFrame: predictions
         """
-        
+
         best_loss_idx = min(self.losses, key=self.losses.get)
         best_fit_model = self.models[best_loss_idx]
         return best_fit_model.predict(region_metadata, region_observations, run_day, start_date, end_date)
@@ -162,7 +161,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             weights = get_weights(beta, self.losses)
         else:
             weights = deepcopy(self.weights)
-       
+
         # Get weighted predictions of constituent models
         predictions_df_dict = get_weighted_predictions(predictions_df_dict, weights)
 
@@ -171,9 +170,9 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         if sum(weights.values()) != 0:
             mean_predictions_df = mean_predictions_df.div(sum(weights.values()))
         mean_predictions_df.reset_index(inplace=True)
-    
+
         return mean_predictions_df
-    
+
     # Helper function to get the model indexes
     def _get_index_for_percentile_helper(self, variable_of_interest, date_of_interest, tolerance, percentiles,
                                          region_metadata, region_observations, run_day, start_date, end_date):
@@ -233,11 +232,11 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         ci = uncertainty_params['confidence_interval_sizes']
         confidence_intervals = []
         for c in ci:
-            confidence_intervals.extend([50 - c/2, 50 + c/2])
+            confidence_intervals.extend([50 - c / 2, 50 + c / 2])
         tolerance = uncertainty_params['tolerance']
 
         percentiles_dict, predictions_df_dict = self._get_index_for_percentile_helper(
-            variable_of_interest, date_of_interest, tolerance, percentiles+confidence_intervals,
+            variable_of_interest, date_of_interest, tolerance, percentiles + confidence_intervals,
             region_metadata, region_observations, run_day, start_date, end_date)
 
         # Create dictionary of dataframes for percentiles
@@ -258,17 +257,17 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             percentiles_predictions.drop(columns='predictionDate', inplace=True)
 
         return percentiles_predictions
-    
+
     def get_params_for_percentiles(self, variable_of_interest, date_of_interest, tolerance, percentiles,
                                    region_metadata, region_observations, run_day, start_date, end_date):
-        
+
         percentiles_dict, _ = self._get_index_for_percentile_helper(variable_of_interest, date_of_interest, tolerance,
-                                                                    percentiles, region_metadata, region_observations, 
+                                                                    percentiles, region_metadata, region_observations,
                                                                     run_day, start_date, end_date)
         return_dict = dict()
         for decile in percentiles_dict.keys():
             return_dict[decile] = self.models[percentiles_dict[decile]].model_parameters
-    
+
         return return_dict
 
     def get_trials_distribution(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,

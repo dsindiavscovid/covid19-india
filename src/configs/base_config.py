@@ -1,7 +1,6 @@
 from typing import List
 
 from entities.data_source import DataSource
-from entities.forecast_variables import ForecastVariable
 from entities.intervention_variable import InputType
 from entities.loss_function import LossFunction
 from entities.model_class import ModelClass
