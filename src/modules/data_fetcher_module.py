@@ -35,6 +35,17 @@ class DataFetcherModule(object):
     @staticmethod
     def get_regional_metadata(region_type, region_name, data_source=DataSource.tracker_district_daily,
                               filepath="../data/regional_metadata.json"):
+        """Gets metadata for a region
+
+        Args:
+            region_type (str): Type of region (district or state)
+            region_name (list): List of regions
+            data_source (DataSource): Data source
+            filepath (str, optional): region metadata file path (default: "../data/regional_metadata.json")
+
+        Returns:
+            dict: region metadata
+        """
         if not isinstance(region_name, list):
             region_name = [region_name]
         data_fetcher = DataFetcherFactory.get_data_fetcher(data_source)
@@ -44,6 +55,26 @@ class DataFetcherModule(object):
     @staticmethod
     def get_staffing_ratios(filepath):
         return pd.read_csv(filepath)
+
+    @staticmethod
+    def get_actual_smooth(region_type, region_name, data_source, input_filepath):
+        """
+
+        Args:
+            region_type (str): Type of region (district or state)
+            region_name (list): List of regions
+            data_source (DataSource): Data source
+            input_filepath (str): input data file path
+
+        Returns:
+            dict: dictionary of dataframes with actual and smoothed observations
+        """
+        df_actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
+                                                                  smooth=False, filepath=input_filepath)
+        df_smoothed = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
+                                                                    smooth=True, filepath=input_filepath)
+
+        return {'actual': df_actual, 'smoothed': df_smoothed}
 
 
 if __name__ == "__main__":

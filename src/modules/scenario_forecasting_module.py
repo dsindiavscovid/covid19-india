@@ -95,7 +95,7 @@ class ScenarioForecastingModule(object):
         """
         forecasting_module = ScenarioForecastingModule(config.model_class, config.model_parameters)
         predictions = forecasting_module.predict_for_region(config.data_source, config.region_type, config.region_name,
-                                                            config.run_day, config.start_date, config.input_type,
+                                                            config.forecast_run_day, config.start_date, config.input_type,
                                                             config.time_intervals,
                                                             config.input_filepath)
 

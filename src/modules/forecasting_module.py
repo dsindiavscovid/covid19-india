@@ -50,7 +50,7 @@ class ForecastingModule(object):
     def from_config(config: ForecastingModuleConfig):
         forecasting_module = ForecastingModule(config.model_class, config.model_parameters)
         predictions = forecasting_module.predict_for_region(config.data_source, config.region_type, config.region_name,
-                                                            config.run_day, config.forecast_start_date,
+                                                            config.forecast_run_day, config.forecast_start_date,
                                                             config.forecast_end_date, config.input_filepath)
         if config.output_dir is not None and config.output_file_prefix is not None:
             predictions.to_csv(os.path.join(config.output_dir, f'{config.output_file_prefix}.csv'), index=False)

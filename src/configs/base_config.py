@@ -29,14 +29,14 @@ class TrainingModuleConfig(BaseConfig):
 
 
 class ModelEvaluatorConfig(BaseConfig):
-    run_day: str
+    test_run_day: str
     test_start_date: str
     test_end_date: str
     eval_loss_functions: List[LossFunction]
 
 
 class ForecastingModuleConfig(BaseConfig):
-    run_day: str
+    forecast_run_day: str
     forecast_start_date: str
     forecast_end_date: str
     # forecast_variables: List[ForecastVariable] TODO: Is this necessary
@@ -56,7 +56,7 @@ class ForecastTimeInterval(BaseModel):
 
 
 class ScenarioForecastingModuleConfig(BaseConfig):
-    run_day: str
+    forecast_run_day: str
     start_date: str
     time_intervals: List[ForecastTimeInterval]
     input_type: InputType

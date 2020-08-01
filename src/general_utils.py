@@ -2,7 +2,6 @@ import os
 from datetime import datetime
 
 from IPython.display import Markdown, display
-from modules.data_fetcher_module import DataFetcherModule
 from utils.time import get_date
 
 
@@ -133,12 +132,3 @@ def compute_dates(time_interval_config):
         time_interval_config["direct"] = d
 
     return time_interval_config
-
-
-def get_actual_smooth(region_type, region_name, data_source, input_filepath, start_date, end_date):
-    df_actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
-                                                              smooth=False, filepath=input_filepath)
-    df_smoothed = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
-                                                                smooth=True, filepath=input_filepath)
-
-    return {'actual': df_actual, 'smoothed': df_smoothed}

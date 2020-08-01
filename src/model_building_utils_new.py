@@ -11,8 +11,8 @@ import utils.staffing as domain_info
 from configs.base_config import TrainingModuleConfig, ModelEvaluatorConfig, ForecastingModuleConfig
 from configs.model_building_session_config import ModelBuildingSessionOutputArtifacts, ModelBuildingSessionParams, \
     ModelBuildingSessionMetrics
-from general_utils import create_output_folder, render_artifact, merge_dicts, set_dict_field, \
-    get_dict_field, get_actual_smooth, compute_dates
+from general_utils import create_output_folder, render_artifact, set_dict_field, \
+    get_dict_field, compute_dates
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
@@ -93,6 +93,7 @@ class ModelBuildingSession(BaseModel):
             session_name = user_name + current_date
         self.params.session_name = session_name
         self.params.user_name = user_name
+
         # fix the output_directory and default paths for output artifacts
         self.params.output_dir = os.path.join(ModelBuildingSession._DEFAULT_ROOT_DIR, f'{session_name}_outputs')
         for key, value in self.output_artifacts.__fields__.items():
@@ -102,12 +103,10 @@ class ModelBuildingSession(BaseModel):
     @staticmethod
     def _init_mlflow_datapipeline_config():
 
-        # ML Flow configuration
-        # TODO: replace
-        # mlflow_config = read_file(ModelBuildingSession.ML_FLOW_CONFIG,"json")
-        with open(ModelBuildingSession._ML_FLOW_CONFIG) as mlflow_file:
-            mlflow_config = json.load(mlflow_file)
+        # MLflow configuration
+        mlflow_config = read_file(ModelBuildingSession._ML_FLOW_CONFIG, "json", "dict")
         mlflow.set_tracking_uri(mlflow_config['tracking_url'])
+        # TODO: Tracking URL as session param?
         os.environ['MLFLOW_TRACKING_USERNAME'] = mlflow_config['username']
         os.environ['MLFLOW_TRACKING_PASSWORD'] = mlflow_config['password']
 
@@ -214,7 +213,7 @@ class ModelBuildingSession(BaseModel):
         actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
                                                                filepath=input_data_file, smooth=False, simple=True)
 
-        actual.to_csv(output_artifacts.cleaned_case_count_file, index=False)
+        write_file(actual, output_artifacts.cleaned_case_count_file, "csv", "dataframe")
         plot_data(region_name, actual, plot_path=output_artifacts.plot_case_count)
         return outputs
 
@@ -246,7 +245,6 @@ class ModelBuildingSession(BaseModel):
             # set all the learning elements
             # TODO: make sure the module configs and the default session config are consistent
             # items to rename in the configs and also the corresponding modules
-            # run_day --> test_run_day or forecast_run_day
             # remove forecast_variables from forecasting module config ??
             cfg['model_parameters'] = model_parameters
             # TODO: check this Nayana - if input arg is unspecified it will be None
@@ -268,18 +266,16 @@ class ModelBuildingSession(BaseModel):
 
             cfg['model_parameters'] = read_file(model_file, "json", "dict")
             cfg['eval_loss_functions'] = eval_loss_functions
-            # TODO: Rename to test_run_day
-            cfg['run_day'] = time_interval_config["direct"]["test_run_day"]
+            cfg['test_run_day'] = time_interval_config["direct"]["test_run_day"]
             cfg['test_start_date'] = time_interval_config["direct"]["test_start_date"]
             cfg['test_end_date'] = time_interval_config["direct"]["test_end_date"]
 
         # check all the different variants !
         elif operation in ['forecast']:
             # TODO: Later version - we need to set uncertainty, prediction mode, model_parameters and the dates
-            # TODO: Rename to forecast run day
             cfg['model_parameters'] = read_file(model_file, "json", "dict")
             cfg['model_parameters']["uncertainty_parameters"] = uncertainty_parameters
-            cfg['run_day'] = time_interval_config["direct"]["test_run_day"]
+            cfg['forecast_run_day'] = time_interval_config["direct"]["forecast_run_day"]
             cfg['forecast_start_date'] = time_interval_config["direct"]["forecast_start_date"]
             cfg['forecast_end_date'] = time_interval_config["direct"]["forecast_end_date"]
         else:
@@ -489,10 +485,8 @@ class ModelBuildingSession(BaseModel):
         output_dir = "/".join(output_artifacts.plot_M2_CARD.split("/")[0:-1])
 
         # Get actual and smoothed observations in correct ranges
-        df_m1 = get_actual_smooth(region_type, region_name, data_source, input_filepath, plot_start_date_m1,
-                                  test_end_date)
-        df_m2 = get_actual_smooth(region_type, region_name, data_source, input_filepath, plot_start_date_m2,
-                                  train2_end_date)
+        df_m1 = DataFetcherModule.get_actual_smooth(region_type, region_name, data_source, input_filepath)
+        df_m2 = DataFetcherModule.get_actual_smooth(region_type, region_name, data_source, input_filepath)
 
         # M1 train
         if verbose:
@@ -540,7 +534,7 @@ class ModelBuildingSession(BaseModel):
                                                                             include_best_fit=True)
 
         # TODO: check this writing out
-        df_predictions_forecast_m2.to_csv(output_artifacts.M2_full_output_forecast_file)
+        write_file(df_predictions_forecast_m2, output_artifacts.M2_full_output_forecast_file, "csv", "dataframe")
 
         # Get percentiles to be plotted
         uncertainty_parameters = forecast_config.model_parameters['uncertainty_parameters']
@@ -590,7 +584,7 @@ class ModelBuildingSession(BaseModel):
 
         # set the dates and the model parameters
         forecast_config.model_parameters = model_params
-        forecast_config.run_day = forecast_run_day  # TODO: Rename
+        forecast_config.forecast_run_day = forecast_run_day
         forecast_config.forecast_start_date = forecast_start_date
         forecast_config.forecast_end_date = forecast_end_date
 
@@ -734,7 +728,7 @@ class ModelBuildingSession(BaseModel):
             df = ModelBuildingSession._generate_forecast_plot_data(region_type, region_name, data_source,
                                                                    input_data_file, forecasting_output,
                                                                    dates)
-            # TODO: splitting the plot_path is a bit awkward -check if it works
+            # TODO: splitting the plot_path is a bit awkward - check if it works
             # Is there an option in the function for only CARD plots
             m2_forecast_plots(region_name, df["actual_m2"], df["smoothed_m2"], df["predictions_forecast_m2"],
                               dates["train2_start_date"],

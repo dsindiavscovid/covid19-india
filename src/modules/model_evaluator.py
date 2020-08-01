@@ -29,7 +29,7 @@ class ModelEvaluator(object):
     def from_config(config: ModelEvaluatorConfig):
         model_evaluator = ModelEvaluator(config.model_class, config.model_parameters)
         metric_results = model_evaluator.evaluate_for_region(config.data_source, config.region_type, config.region_name,
-                                                             config.run_day, config.test_start_date,
+                                                             config.test_run_day, config.test_start_date,
                                                              config.test_end_date, config.eval_loss_functions,
                                                              config.input_filepath)
         # if config.output_dir is not None and config.output_file_prefix is not None:
