@@ -223,7 +223,7 @@ class ModelBuildingSession(BaseModel):
                                          time_interval_config,
                                          model_class, model_parameters, train_loss_function, search_space,
                                          search_parameters,
-                                         eval_loss_functions, uncertainty_parameters, model_file, operation):
+                                         eval_loss_functions, uncertainty_parameters, model_file, operation, output_dir):
 
         cfg = dict()
 
@@ -231,13 +231,13 @@ class ModelBuildingSession(BaseModel):
         # Note: if the keys are aligned and this function was called as a ModelBuildingSession instance method,
         # we could have done a dict update for the subset of keys
         cfg['data_source'] = data_source
-        # TODO: Nayana check -- is this fine?  region_name is already a list I think
         cfg['region_name'] = region_name if isinstance(region_name, list) else [region_name]
         cfg['region_type'] = region_type
         cfg['model_class'] = model_class
         cfg['input_filepath'] = input_filepath
         # TODO: do we need this to be set really ?
-        cfg['output_filepath'] = operation
+        cfg['output_file_prefix'] = operation
+        cfg['output_dir'] = output_dir
 
         # set the extra elements necessary
         if operation in ["M1_train", "M2_train"]:
@@ -316,7 +316,7 @@ class ModelBuildingSession(BaseModel):
                                                                                  sp.search_parameters,
                                                                                  sp.eval_loss_functions,
                                                                                  sp.uncertainty_parameters,
-                                                                                 self.output_artifacts)
+                                                                                 self.output_artifacts, sp.output_dir)
         self.metrics.__fields__.update(outputs['metrics'])
 
         # TODO: Is there a better method of doing this?
@@ -336,7 +336,7 @@ class ModelBuildingSession(BaseModel):
                                                   input_filepath, time_interval_config, model_class, model_parameters,
                                                   train_loss_function,
                                                   search_space, search_parameters, eval_loss_functions,
-                                                  uncertainty_parameters, output_artifacts, ):
+                                                  uncertainty_parameters, output_artifacts, output_dir):
         outputs = {}
         time_interval_config = compute_dates(time_interval_config)  # TODO: where should this go?
         metrics = ModelBuildingSession.train_eval_static(region_name, region_type, data_source,
@@ -344,12 +344,12 @@ class ModelBuildingSession(BaseModel):
                                                          model_parameters,
                                                          train_loss_function,
                                                          search_space, search_parameters, eval_loss_functions,
-                                                         uncertainty_parameters, output_artifacts)
+                                                         uncertainty_parameters, output_artifacts, output_dir)
 
         ModelBuildingSession.forecast_and_plot_static(region_name, region_type, data_source,
                                                       input_filepath, time_interval_config, model_class,
                                                       model_parameters,
-                                                      uncertainty_parameters, output_artifacts, verbose)
+                                                      uncertainty_parameters, output_artifacts, output_dir, verbose)
 
         outputs['metrics'] = metrics
         return outputs
@@ -361,7 +361,7 @@ class ModelBuildingSession(BaseModel):
                           model_parameters,
                           train_loss_function,
                           search_space, search_parameters, eval_loss_functions,
-                          uncertainty_parameters, output_artifacts):
+                          uncertainty_parameters, output_artifacts, output_dir):
         metrics = {}
 
         # 1.  M1 train step
@@ -376,7 +376,7 @@ class ModelBuildingSession(BaseModel):
                                                                                 search_parameters,
                                                                                 eval_loss_functions,
                                                                                 uncertainty_parameters,
-                                                                                None, "M1_train")
+                                                                                None, "M1_train", output_dir)
         # run the training
         M1_train_results = TrainingModule.from_config(deepcopy(M1_train_config))
         # collect all the outputs
@@ -388,7 +388,6 @@ class ModelBuildingSession(BaseModel):
         # write_file(M1_train_results['model_parameters']['param_ranges'], output_artifacts.M1_param_ranges,
         #            "csv", "dataframe")
         metrics['M1_beta'] = M1_train_results['model_parameters']['beta']
-        # TODO: Nayana generic converter from json to a single row of dataframe ?
         # TODO: CONVERT
         # metrics_M1_train_losses = loss_json_to_dataframe(M1_train_results['train_metric_results'], 'train1')
 
@@ -404,7 +403,7 @@ class ModelBuildingSession(BaseModel):
                                                                                eval_loss_functions,
                                                                                uncertainty_parameters,
                                                                                output_artifacts.M1_model_params,
-                                                                               "M1_test")
+                                                                               "M1_test", output_dir)
         # run the evaluation
         M1_test_results = ModelEvaluator.from_config(deepcopy(M1_test_config))
 
@@ -425,7 +424,7 @@ class ModelBuildingSession(BaseModel):
                                                                                 search_parameters,
                                                                                 eval_loss_functions,
                                                                                 uncertainty_parameters,
-                                                                                None, "M2_train")
+                                                                                None, "M2_train", output_dir)
         # run the training
         M2_train_results = TrainingModule.from_config(deepcopy(M2_train_config))
 
@@ -453,7 +452,7 @@ class ModelBuildingSession(BaseModel):
     @staticmethod
     def forecast_and_plot_static(region_name, region_type, data_source,
                                  input_filepath, time_interval_config, model_class, model_parameters,
-                                 uncertainty_parameters, output_artifacts, verbose=True):
+                                 uncertainty_parameters, output_artifacts, output_dir, verbose=True):
         # Get all dates of interest
         dates = time_interval_config['direct']
         forecast_end_date = dates['forecast_end_date']
@@ -484,7 +483,7 @@ class ModelBuildingSession(BaseModel):
                                                                                 None, None, None,
                                                                                 None, None, None,
                                                                                 output_artifacts.M1_model_params,
-                                                                                "forecast")
+                                                                                "forecast", output_dir)
 
         # TODO: need to get this right from output_artifacts
         # How do we make sure the names given in the plots correspond to the ones in output_artifact keys?
@@ -638,7 +637,7 @@ class ModelBuildingSession(BaseModel):
                                                                         sp.uncertainty_parameters, sp.planning,
                                                                         sp.staffing,
                                                                         self.output_artifacts.M2_model_params,
-                                                                        self.output_artifacts)
+                                                                        self.output_artifacts, sp.output_dir)
         self.metrics.__fields__.update(outputs['metrics'])
 
         # TODO: Is there a better method of doing this?
@@ -656,25 +655,7 @@ class ModelBuildingSession(BaseModel):
     @staticmethod
     def generate_planning_outputs_static(region_name, region_type, data_source, input_data_file,
                                          time_interval_config, model_class, uncertainty_parameters, planning,
-                                         staffing, model_file, output_artifacts):
-        """
-
-        Args:
-            region_name ():
-            region_type ():
-            data_source ():
-            input_data_file ():
-            time_interval_config ():
-            model_class ():
-            uncertainty_parameters ():
-            planning ():
-            staffing ():
-            model_file ():
-            output_artifacts ():
-
-        Returns:
-
-        """
+                                         staffing, model_file, output_artifacts, output_dir):
         outputs = {}
 
         # 1. read the ensemble model file
@@ -711,8 +692,7 @@ class ModelBuildingSession(BaseModel):
         # TODO: Check if this is correct
         m2_child_forecast_config = ModelBuildingSession.generate_model_operations_config(
             region_name, region_type, data_source, input_data_file, time_interval_config, child_model_class,
-            None, None, None, None, None, None, output_artifacts.M2_planning_model_params,
-            "forecast")
+            None, None, None, None, None, None, output_artifacts.M2_planning_model_params, "forecast", output_dir)
 
         # 5. compute the parameters (just r0) for the different scenarios including the planning one
         rt_multiplier_list = [1]

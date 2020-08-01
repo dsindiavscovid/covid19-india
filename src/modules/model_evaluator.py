@@ -32,9 +32,9 @@ class ModelEvaluator(object):
                                                              config.run_day, config.test_start_date,
                                                              config.test_end_date, config.eval_loss_functions,
                                                              config.input_filepath)
-        if config.output_file_prefix is not None:
-            with open(os.path.join(config.output_dir, f'{config.output_file_prefix}_output.json'), 'w') as outfile:
-                json.dump(metric_results, outfile, indent=4)
+        # if config.output_dir is not None and config.output_file_prefix is not None:
+        #     with open(os.path.join(config.output_dir, f'{config.output_file_prefix}_output.json'), 'w') as outfile:
+        #         json.dump(metric_results, outfile, indent=4)
         return metric_results
 
     @staticmethod

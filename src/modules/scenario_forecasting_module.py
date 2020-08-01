@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 from typing import List
 
@@ -97,6 +98,7 @@ class ScenarioForecastingModule(object):
                                                             config.run_day, config.start_date, config.input_type,
                                                             config.time_intervals,
                                                             config.input_filepath)
-        if config.output_file_prefix is not None:
-            predictions.to_csv(f'{config.output_file_prefix}.csv', index=False)
+
+        if config.output_dir is not None and config.output_file_prefix is not None:
+            predictions.to_csv(os.path.join(config.output_dir, f'{config.output_file_prefix}.csv'), index=False)
         return predictions
