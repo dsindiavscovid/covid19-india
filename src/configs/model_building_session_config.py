@@ -12,10 +12,10 @@ class ModelBuildingSessionOutputArtifacts(BaseModel):
     cleaned_case_count_file: str
     plot_case_count: str
     plot_M1_CARD: str
-    plot_M1_single_A: str
-    plot_M1_single_C: str
-    plot_M1_single_D: str
-    plot_M1_single_R: str
+    plot_M1_single_hospitalized: str
+    plot_M1_single_confirmed: str
+    plot_M1_single_deceased: str
+    plot_M1_single_recovered: str
     M1_model_params: str
     M1_beta_trials: str
     M1_param_ranges: str
@@ -23,15 +23,15 @@ class ModelBuildingSessionOutputArtifacts(BaseModel):
     M1_test_config: str
     M2_full_output_forecast_file: str
     plot_M2_CARD: str
-    plot_M2_single_A: str
-    plot_M2_single_C: str
-    plot_M2_single_D: str
-    plot_M2_single_R: str
+    plot_M2_single_hospitalized: str
+    plot_M2_single_confirmed: str
+    plot_M2_single_deceased: str
+    plot_M2_single_recovered: str
     plot_M2_forecast_CARD: str
-    plot_M2_forecast_single_A: str
-    plot_M2_forecast_single_C: str
-    plot_M2_forecast_single_D: str
-    plot_M2_forecast_single_R: str
+    plot_M2_forecast_single_hospitalized: str
+    plot_M2_forecast_single_confirmed: str
+    plot_M2_forecast_single_deceased: str
+    plot_M2_forecast_single_recovered: str
     M2_model_params: str
     M2_beta_trials: str
     M2_param_ranges: str

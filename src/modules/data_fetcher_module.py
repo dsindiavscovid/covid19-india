@@ -58,7 +58,7 @@ class DataFetcherModule(object):
 
     @staticmethod
     def get_actual_smooth(region_type, region_name, data_source, input_filepath):
-        """
+        """Get actual and smoothed data for a region
 
         Args:
             region_type (str): Type of region (district or state)

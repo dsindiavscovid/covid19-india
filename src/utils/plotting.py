@@ -11,7 +11,6 @@ from adjustText import adjust_text
 from entities.forecast_variables import ForecastVariable
 from matplotlib import pyplot as plt, dates as mdates
 
-
 plot_colors = {
     "confirmed": "C0",
     "recovered": "green",
@@ -242,7 +241,7 @@ def pdf_cdf_plot(variable, case_counts, cdf, pdf=None, case_counts_pdf=None, use
     ax_cdf.set_ylabel('CDF')
     lines, labels = ax_cdf.get_legend_handles_labels()
     lines2, labels2 = ax_pdf.get_legend_handles_labels()
-    ax_pdf.legend(lines+lines2, labels+labels2)
+    ax_pdf.legend(lines + lines2, labels + labels2)
     plt.title(title)
     ax_pdf.set_xlabel('Case counts')
     plt.grid()
@@ -253,7 +252,8 @@ def pdf_cdf_plot(variable, case_counts, cdf, pdf=None, case_counts_pdf=None, use
 
 
 def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_test,
-             train1_start_date, test1_start_date, column_tags=None, variables=None, output_dir='', verbose=False):
+             train1_start_date, test1_start_date, output_artifacts, column_tags=None, variables=None, output_dir='',
+             verbose=False):
     """Creates all M1 plots
 
     Args:
@@ -282,7 +282,7 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
     ]
 
     # Multivariate plot with M1 mean predictions
-    path = os.path.join(output_dir, 'm1.png')
+    path = output_artifacts['plot_M1_CARD']
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
                                  df_predictions_train=df_predictions_train, df_predictions_test=df_predictions_test,
                                  variables=variables, column_label='mean', column_tag='mean',
@@ -290,8 +290,7 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
 
     # Single variable plot
     for variable in variables:
-        file = f'm1_{variable}.png'
-        path = os.path.join(output_dir, file)
+        path = output_artifacts[f'plot_M1_single_{variable}']  # TODO: This won't work for hospitalized
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_train=df_predictions_train,
                                         df_predictions_test=df_predictions_test, column_tags=column_tags,
@@ -299,7 +298,8 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
                                         path=path, verbose=verbose)
 
 
-def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_start_date, column_tags=None,
+def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_start_date, output_artifacts,
+             column_tags=None,
              variables=None, output_dir='', verbose=False):
     """Creates all M2 plots
 
@@ -324,7 +324,7 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
     vertical_lines = [{'date': train2_start_date, 'color': 'brown', 'label': 'Train starts'}]
 
     # Multivariate plot with M1 mean predictions
-    path = os.path.join(output_dir, 'm2.png')
+    path = output_artifacts['plot_M2_CARD']
     multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
                                  df_predictions_train=df_predictions_train, df_predictions_test=None,
                                  variables=variables, column_label='mean', column_tag='mean',
@@ -332,8 +332,7 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
 
     # Single variable plot
     for variable in variables:
-        file = f'm2_{variable}.png'
-        path = os.path.join(output_dir, file)
+        path = output_artifacts[f'plot_M2_single_{variable}']
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_train=df_predictions_train, df_predictions_test=None,
                                         column_tags=column_tags, vertical_lines=vertical_lines,
@@ -341,8 +340,9 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
 
 
 def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_forecast,
-                      train2_start_date, forecast_start_date, column_tags=None, variables=None, output_dir='',
-                      verbose=False, plot_name_prefix=None):
+                      train2_start_date, forecast_start_date, output_artifacts, column_tags=None, variables=None,
+                      output_dir='',
+                      verbose=False, scenario=None):
     """Creates all M2 forecast plots
 
     Args:
@@ -356,7 +356,7 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
         variables (list, optional): list of variables to plot (default: None)
         output_dir (str, optional): output directory path (default: '')
         verbose (bool, optional): if True, include additional plotting (uncertainty during training)
-        plot_name_prefix (str, optional): prefix for plot name
+        scenario (str, optional): scenario name (default: None)
 
     """
 
@@ -371,32 +371,27 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
     ]
 
     # Multivariate plot with M1 mean predictions
-    if plot_name_prefix is not None:
-        title = f'{region_name}: {plot_name_prefix} M2 forecast'
-        path = os.path.join(output_dir, f'{plot_name_prefix}_m2_forecast.png')
+    if scenario is not None:
+        title = f'{region_name}: Scenario {scenario} - M2 forecast'
+        path = output_artifacts[f'plot_M2_{scenario}_CARD']
     else:
         title = f'{region_name}: M2 forecast'
-        path = os.path.join(output_dir, 'm2_forecast.png')
-    multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed,
-                                 df_predictions_test=df_predictions_forecast,
+        path = output_artifacts[f'plot_M2_forecast_CARD']
+    multivariate_case_count_plot(df_actual, df_smoothed=df_smoothed, df_predictions_test=df_predictions_forecast,
                                  variables=variables, column_label='mean', column_tag='mean',
                                  vertical_lines=vertical_lines, title=title, path=path)
 
     # Single variable plot
     for variable in variables:
-        if plot_name_prefix is not None:
-            title = f'{region_name}: {plot_name_prefix} M2 forecast - {variable}'
-            path = os.path.join(output_dir, f'{plot_name_prefix}_m2_forecast.png')
-        else:
+        if scenario is None:
             title = f'{region_name}: M2 forecast - {variable}'
-            path = os.path.join(output_dir, f'm2_forecast_{variable}.png')
-        single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
-                                        df_predictions_test=df_predictions_forecast, column_tags=column_tags,
-                                        vertical_lines=vertical_lines,
-                                        title=title, path=path, verbose=verbose)
+            path = output_artifacts[f'plot_M2_forecast_single_{variable}']
+            single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
+                                            df_predictions_test=df_predictions_forecast, column_tags=column_tags,
+                                            vertical_lines=vertical_lines, title=title, path=path, verbose=verbose)
 
 
-def distribution_plots(trials, variable, output_dir=''):
+def distribution_plots(trials, variable, output_artifacts, output_dir=''):
     """Create PDF and CDF plots
 
     Args:
@@ -407,12 +402,12 @@ def distribution_plots(trials, variable, output_dir=''):
     """
     trials_new = deepcopy(trials)
     num_dec = 3  # Number of decimal places to round off to
-    trials_new['pdf'] = trials_new['pdf'].apply(lambda x: int(round(x, num_dec)*(10**num_dec)))
+    trials_new['pdf'] = trials_new['pdf'].apply(lambda x: int(round(x, num_dec) * (10 ** num_dec)))
     trials_new = trials_new[trials_new['pdf'] != 0]
-    trials = trials.iloc[max(0, trials_new.index.min()-1):min(trials.shape[0]-1, trials_new.index.max()+1), :]
+    trials = trials.iloc[max(0, trials_new.index.min() - 1):min(trials.shape[0] - 1, trials_new.index.max() + 1), :]
     case_counts_pdf = []
     for i in range(trials_new.shape[0]):
-        case_counts_pdf.extend([trials_new.iloc[i, :]['case_counts']]*trials_new.iloc[i, :]['pdf'])
+        case_counts_pdf.extend([trials_new.iloc[i, :]['case_counts']] * trials_new.iloc[i, :]['pdf'])
 
     pdf_cdf_plot(variable, trials['case_counts'], trials['cdf'], case_counts_pdf=case_counts_pdf,
                  title=f'PDF and CDF for {variable}', path=os.path.join(output_dir, 'm2_distribution.png'))
