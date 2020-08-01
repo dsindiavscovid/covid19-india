@@ -2,7 +2,6 @@ import json
 import os
 from copy import deepcopy
 from datetime import datetime
-from typing import List
 
 import mlflow
 import pandas as pd
@@ -10,7 +9,8 @@ import publishers.mlflow_logging as mlflow_logger
 import publishers.report_generation as reporting
 import utils.staffing as domain_info
 from configs.base_config import TrainingModuleConfig, ModelEvaluatorConfig, ForecastingModuleConfig
-from entities.model_class import ModelClass
+from configs.model_building_session_config import ModelBuildingSessionOutputArtifacts, ModelBuildingSessionParams, \
+    ModelBuildingSessionMetrics
 from general_utils import create_output_folder, render_artifact, merge_dicts, set_dict_field, \
     get_dict_field, generate_forecast_plot_data, get_actual_smooth, compute_dates
 from model_wrappers.model_factory import ModelFactory
@@ -18,11 +18,11 @@ from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
-from nb_utils import forecast
 from pydantic import BaseModel
-from utils.data_transformer_helper import flatten, add_init_observations_to_predictions
+from utils.data_transformer_helper import flatten, add_init_observations_to_predictions, get_observations_subset, \
+    pydantic_to_dict
 from utils.io import read_file, write_file
-from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots, plot_data_new
+from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots, plot_data
 from utils.time import get_date
 
 
@@ -38,102 +38,6 @@ from utils.time import get_date
 # Proper handling to what-if-scenarios rather than the current limited hardcoding
 
 
-class ModelBuildingSessionOutputArtifacts(BaseModel):
-    """
-      Config object to capture output artifacts
-    """
-    cleaned_case_count_file: str
-    plot_case_count: str
-    plot_M1_CARD: str
-    plot_M1_single_A: str
-    plot_M1_single_C: str
-    plot_M1_single_D: str
-    plot_M1_single_R: str
-    M1_model_params: str
-    M1_beta_trials: str
-    M1_param_ranges: str
-    M1_train_config: str
-    M1_test_config: str
-    M2_full_output_forecast_file: str
-    plot_M2_CARD: str
-    plot_M2_single_A: str
-    plot_M2_single_C: str
-    plot_M2_single_D: str
-    plot_M2_single_R: str
-    plot_M2_forecast_CARD: str
-    plot_M2_forecast_single_A: str
-    plot_M2_forecast_single_C: str
-    plot_M2_forecast_single_D: str
-    plot_M2_forecast_single_R: str
-    M2_model_params: str
-    M2_beta_trials: str
-    M2_param_ranges: str
-    M2_percentile_params: str
-    M2_train_config: str
-    M2_forecast_config: str
-    plot_planning_pdf_cdf: str
-    plot_M2_planning_CARD: str
-    plot_M2_scenario_1_CARD: str
-    plot_M2_scenario_2_CARD: str
-    plot_M2_scenario_3_CARD: str
-    M2_planning_model_params: str
-    M2_planning_output_forecast_file: str
-    staffing_planning: str
-    staffing_scenario_1: str
-    staffing_scenario_2: str
-    staffing_scenario_3: str
-    session_log: str
-    model_building_report: str
-    planning_report: str
-
-
-class ModelBuildingSessionParams(BaseModel):
-    """
-      Config object to capture user params for session
-    """
-    # TODO: elements of dict fields could be additionally validated by creating config class inheriting from BaseModel
-    session_name: str = None
-    user_name: str
-    experiment_name: str
-    output_dir: str
-    input_data_file: str = None
-    interval_to_consider: int
-
-    region_name: List[str]
-    region_type: str
-    data_source: str
-
-    time_interval_config: dict
-    model_class: ModelClass
-    model_parameters: dict
-    # TODO: choosing to use dict instead of LossFunction for uniform handling
-    # TODO: should we move below three items into one unit because they all pertain to training -
-    train_loss_function: dict
-    search_space: dict
-    search_parameters: dict
-    # TODO: check if List[dict] is fine and choosing List[dict] instead of List[LossFunction] for uniform handling
-    eval_loss_functions: List[dict]
-    uncertainty_parameters: dict
-    planning: dict
-    staffing: dict
-    publish_flag: bool = True
-    comments: str = ''
-
-
-class ModelBuildingSessionMetrics(BaseModel):
-    """
-      Config object to capture session metrics
-    """
-    M1_beta: float
-    M1_losses: pd.DataFrame = None
-    M2_beta: float
-    M2_losses: pd.DataFrame = None
-    M2_scenarios_r0: List = None
-
-    class Config:
-        arbitrary_types_allowed = True
-
-
 class ModelBuildingSession(BaseModel):
     """
         Session object to encapsulate the model building
@@ -145,11 +49,11 @@ class ModelBuildingSession(BaseModel):
 
     # Constant filepaths
     _DEFAULT_SESSION_CONFIG: str = "../config/default_session_config.json"
-    _ML_FLOW_CONFIG: str = "../notebooks/mlflow_credentials.json"
+    _ML_FLOW_CONFIG: str = "mlflow_credentials.json"
     _OFFICIAL_DATA_PIPELINE_CONFIG: str = "../../pyathena/pyathena.rc"
     _DEFAULT_ROOT_DIR: str = "../outputs/"
-    _DEFAULT_MODEL_BUILDING_REPORT_TEMPLATE: str = 'publishers/model_building_template_v1.mustache'
-    _DEFAULT_PLANNING_REPORT_TEMPLATE: str = 'publishers/planning_template_v1.mustache'
+    _DEFAULT_MODEL_BUILDING_REPORT_TEMPLATE: str = '../src/publishers/model_building_template_v1.mustache'
+    _DEFAULT_PLANNING_REPORT_TEMPLATE: str = '../src/publishers/planning_template_v1.mustache'
 
     def __init__(self, session_name, user_name='guest'):
 
@@ -192,7 +96,8 @@ class ModelBuildingSession(BaseModel):
         # fix the output_directory and default paths for output artifacts
         self.params.output_dir = os.path.join(ModelBuildingSession._DEFAULT_ROOT_DIR, f'{session_name}_outputs')
         for key, value in self.output_artifacts.__fields__.items():
-            self.output_artifacts.__setattr__(key, os.path.join(self.params.output_dir, value.name))
+            self.output_artifacts.__setattr__(key, os.path.join(self.params.output_dir,
+                                                                self.output_artifacts.__getattribute__(key)))
 
     @staticmethod
     def _init_mlflow_datapipeline_config():
@@ -310,7 +215,7 @@ class ModelBuildingSession(BaseModel):
                                                                filepath=input_data_file, smooth=False, simple=True)
 
         actual.to_csv(output_artifacts.cleaned_case_count_file, index=False)
-        plot_data_new(region_name, actual, plot_path=output_artifacts.plot_case_count)
+        plot_data(region_name, actual, plot_path=output_artifacts.plot_case_count)
         return outputs
 
     @staticmethod
@@ -414,8 +319,13 @@ class ModelBuildingSession(BaseModel):
                                                                                  self.output_artifacts)
         self.metrics.__fields__.update(outputs['metrics'])
 
+        # TODO: Is there a better method of doing this?
+        report_params = pydantic_to_dict(self.params)
+        report_metrics = pydantic_to_dict(self.metrics)
+        report_output_artifacts = pydantic_to_dict(self.output_artifacts)
+
         # creating report outside of the static_method to keep it simple
-        reporting.create_report(self.params, self.metrics, self.output_artifacts,
+        reporting.create_report(report_params, report_metrics, report_output_artifacts,
                                 template_path=ModelBuildingSession._DEFAULT_MODEL_BUILDING_REPORT_TEMPLATE,
                                 report_path=self.output_artifacts.model_building_report)
 
@@ -533,7 +443,10 @@ class ModelBuildingSession(BaseModel):
         # TODO: CONVERT
         # metrics['M2_losses'] = loss_json_to_dataframe(M2_train_results['train_metric_results'], 'train2')
 
-        # TODO: STORE train1 and train2 configs
+        # TODO: Make contents serializable and save
+        # write_file(M1_train_config, output_artifacts.M1_train_config, "json", "dict")
+        # write_file(M1_test_config, output_artifacts.M1_test_config, "json", "dict")
+        # write_file(M2_train_config, output_artifacts.M2_train_config, "json", "dict")
 
         return metrics
 
@@ -640,17 +553,23 @@ class ModelBuildingSession(BaseModel):
         percentiles = list(set(uncertainty_parameters['percentiles'] + confidence_intervals))
         column_tags = [str(i) for i in percentiles]
         column_tags.extend(['mean', 'best'])
-        region_name_str, = " ".join(region_name)
+        region_name_str = region_name
+
+        df_m1_plot, df_m2_plot = dict(), dict()
+        df_m1_plot['actual'] = get_observations_subset(df_m1['actual'], plot_start_date_m1, test_end_date)
+        df_m1_plot['smoothed'] = get_observations_subset(df_m1['smoothed'], plot_start_date_m1, test_end_date)
+        df_m2_plot['actual'] = get_observations_subset(df_m2['actual'], plot_start_date_m2, train2_end_date)
+        df_m2_plot['smoothed'] = get_observations_subset(df_m2['smoothed'], plot_start_date_m1, train2_end_date)
 
         # Create M1, M2, M2 forecast plots
-        m1_plots(region_name_str, df_m1["actual"], df_m1["smoothed"], df_predictions_train_m1,
+        m1_plots(region_name_str, df_m1_plot["actual"], df_m1_plot["smoothed"], df_predictions_train_m1,
                  df_predictions_test_m1,
                  train1_start_date, test_start_date, column_tags=column_tags, output_dir=output_dir,
                  verbose=verbose)
-        m2_plots(region_name_str, df_m2["actual"], df_m2["smoothed"], df_predictions_train_m2,
+        m2_plots(region_name_str, df_m2_plot["actual"], df_m2_plot["smoothed"], df_predictions_train_m2,
                  train2_start_date,
                  column_tags=column_tags, output_dir=output_dir, verbose=verbose)
-        m2_forecast_plots(region_name_str, df_m2["actual"], df_m2["smoothed"], df_predictions_forecast_m2,
+        m2_forecast_plots(region_name_str, df_m2_plot["actual"], df_m2_plot["smoothed"], df_predictions_forecast_m2,
                           train2_start_date, forecast_start_date, column_tags=column_tags,
                           output_dir=output_dir,
                           verbose=False)
@@ -664,27 +583,6 @@ class ModelBuildingSession(BaseModel):
                                                   forecast_end_date)
         # Plot PDF and CDF
         distribution_plots(trials, uncertainty_parameters['variable_of_interest'], output_dir=output_dir)
-
-        return
-
-    @staticmethod
-    def flexible_forecast_old(actual, model_params, forecast_run_day, forecast_start_date, forecast_end_date,
-                              forecast_trim_day, forecast_config, with_uncertainty=False, include_best_fit=False):
-        # OLD COMMENT
-        # Get predictions for M1 train and test intervals
-        # Get train predictions for M1, add run day observations and convert the date column to datetime
-        # Get test predictions for M1 until the end of the forecast interval to include planning date for uncertainty
-        # Retain only predictions in test range, add run day observations and convert the date column to datetime
-
-        df_predictions = forecast(model_params, forecast_run_day, forecast_start_date,
-                                  forecast_end_date,
-                                  forecast_config, with_uncertainty, include_best_fit)
-
-        df_predictions = add_init_observations_to_predictions(actual, df_predictions,
-                                                              forecast_run_day)
-        df_predictions['date'] = pd.to_datetime(df_predictions['date'])
-        df_predictions = df_predictions[df_predictions['date'] < get_date(forecast_trim_day, 1)]
-        return df_predictions
 
     @staticmethod
     def flexible_forecast(actual, model_params, forecast_run_day, forecast_start_date, forecast_end_date,
@@ -722,8 +620,6 @@ class ModelBuildingSession(BaseModel):
         forecast_df = forecast_df.reset_index()
 
         # add run day observation and trim
-        print("actual")
-        print(actual)
         forecast_df = add_init_observations_to_predictions(actual, forecast_df,
                                                            forecast_run_day)
         forecast_df['date'] = pd.to_datetime(forecast_df['date'])
@@ -745,8 +641,13 @@ class ModelBuildingSession(BaseModel):
                                                                         self.output_artifacts)
         self.metrics.__fields__.update(outputs['metrics'])
 
+        # TODO: Is there a better method of doing this?
+        report_params = pydantic_to_dict(self.params)
+        report_metrics = pydantic_to_dict(self.metrics)
+        report_output_artifacts = pydantic_to_dict(self.output_artifacts)
+
         # creating report outside of the static_method to keep it simple
-        reporting.create_report(self.params, self.metrics, self.output_artifacts,
+        reporting.create_report(report_params, report_metrics, report_output_artifacts,
                                 template_path=ModelBuildingSession._DEFAULT_PLANNING_REPORT_TEMPLATE,
                                 report_path=self.output_artifacts.planning_report)
 
@@ -756,11 +657,31 @@ class ModelBuildingSession(BaseModel):
     def generate_planning_outputs_static(region_name, region_type, data_source, input_data_file,
                                          time_interval_config, model_class, uncertainty_parameters, planning,
                                          staffing, model_file, output_artifacts):
+        """
+
+        Args:
+            region_name ():
+            region_type ():
+            data_source ():
+            input_data_file ():
+            time_interval_config ():
+            model_class ():
+            uncertainty_parameters ():
+            planning ():
+            staffing ():
+            model_file ():
+            output_artifacts ():
+
+        Returns:
+
+        """
         outputs = {}
 
         # 1. read the ensemble model file
         M2_model_params = read_file(model_file, "json", "dict")
         M2_model = ModelFactory.get_model(model_class, M2_model_params)
+
+        dates = compute_dates(time_interval_config)['direct']
 
         # 2. get the relevant data
         # TODO: if this is a frequent enough coupled call, we should merge this into a new function in DataFetcher
@@ -770,27 +691,33 @@ class ModelBuildingSession(BaseModel):
         region_metadata = DataFetcherModule.get_regional_metadata(region_type, [region_name], data_source=data_source)
 
         # 3. get the representative model for the chosen planning level
+        # TODO: Is this always a single percentile?
+        planning_percentile = planning['ref_level'] if isinstance(planning['ref_level'], list) else [
+            planning['ref_level']]
         percentile_params = M2_model.get_params_for_percentiles(
-            column_of_interest=uncertainty_parameters['variable_of_interest'],
+            variable_of_interest=uncertainty_parameters['variable_of_interest'],
             date_of_interest=uncertainty_parameters['date_of_interest'],
-            tolerance=uncertainty_parameters['tolerance'], percentiles=planning['ref_level'],
+            tolerance=uncertainty_parameters['tolerance'], percentiles=planning_percentile,
             region_metadata=region_metadata, region_observations=region_observations,
-            run_day=time_interval_config['forecast_run_day'], start_date=time_interval_config['forecast_start_date'],
-            end_date=time_interval_config['forecast_end_date'])
+            run_day=dates['forecast_run_day'], start_date=dates['forecast_start_date'],
+            end_date=dates['forecast_end_date'])
 
         M2_planning_model_params = percentile_params[planning['ref_level']]
-        write_file(output_artifacts["M2_planning_model_params"], M2_planning_model_params, "json", "dict")
+        write_file(M2_planning_model_params, output_artifacts.M2_planning_model_params, "json", "dict")
 
         # 4. generate the required forecast config for the child models
         # TODO: check how we could get this without hardcoding it
         child_model_class = "SEIHRD_gen"
+        # TODO: Check if this is correct
         m2_child_forecast_config = ModelBuildingSession.generate_model_operations_config(
             region_name, region_type, data_source, input_data_file, time_interval_config, child_model_class,
-            None, None, None, None, None, output_artifacts["M2_planning_model_params"], "M2_child_forecast",
+            None, None, None, None, None, None, output_artifacts.M2_planning_model_params,
             "forecast")
 
         # 5. compute the parameters (just r0) for the different scenarios including the planning one
-        rt_list = [r * M2_planning_model_params['r0'] for r in [1, planning['rt_multiplier_list']]]
+        rt_multiplier_list = [1]
+        rt_multiplier_list.extend(planning['rt_multiplier_list'])
+        rt_list = [r * M2_planning_model_params['r0'] for r in rt_multiplier_list]
         metrics = {"M2_scenarios_r0": rt_list}
 
         # 6. loop through the different cases
@@ -810,29 +737,29 @@ class ModelBuildingSession(BaseModel):
             # TODO: Need to change saving all the planning and scenario forecasts into a single csv
             # Right now code it will break unless we add extra forecast csv artifacts for other scenarios
             forecasting_output = ForecastingModule.from_config(m2_child_forecast_config)
-            forecast_file_key = f'M2_{case_name}_output_forecast_file'
-            forecasting_output.to_csv(output_artifacts[forecast_file_key], index=False)
+            forecast_file_key = f'staffing_{case_name}'
+            forecasting_output.to_csv(output_artifacts.__getattribute__(forecast_file_key), index=False)
 
             # compute and save the staffing matrices
             active_count = float(
-                forecasting_output[forecasting_output['date'] == uncertainty_parameters['date_of_interest']][
+                forecasting_output[forecasting_output.index == uncertainty_parameters['date_of_interest']][
                     'active_mean'])
-            staffing_df = domain_info.compute_staffing_matrix(active_count, staffing.bed_type_ratio,
-                                                              staffing.staffing_ratios_file_path,
-                                                              staffing.bed_multiplier_count)
+            staffing_df = domain_info.compute_staffing_matrix(active_count, staffing['bed_type_ratio'],
+                                                              staffing['staffing_ratios_file'],
+                                                              staffing['bed_multiplier_count'])
             staff_matrix_file_key = "staffing_" + case_name
-            staffing_df.to_csv(output_artifacts[staff_matrix_file_key], index=False)
+            staffing_df.to_csv(output_artifacts.__getattribute__(staff_matrix_file_key), index=False)
 
             # generate and save the plots (only CARDs)
             plot_file_key = "plot_M2_" + case_name + "_CARD"
-            plot_path = output_artifacts[plot_file_key]
+            plot_path = output_artifacts.__getattribute__(plot_file_key)
             df = generate_forecast_plot_data(region_type, region_name, data_source, input_data_file, forecasting_output,
-                                             time_interval_config)
+                                             dates)
             # TODO: splitting the plot_path is a bit awkward -check if it works
             # Is there an option in the function for only CARD plots
             m2_forecast_plots(region_name, df["actual_m2"], df["smoothed_m2"], df["predictions_forecast_m2"],
-                              time_interval_config["train2_start_date"],
-                              time_interval_config["forecast_start_date"],
+                              dates["train2_start_date"],
+                              dates["forecast_start_date"],
                               column_tags=['mean'], output_dir="/".join(plot_path.split("/")[:-1]),
                               verbose=False, plot_name_prefix=plot_path.split("/")[-1])
 
@@ -846,6 +773,15 @@ class ModelBuildingSession(BaseModel):
 
     @staticmethod
     def list_outputs_static(output_artifacts, display_list=['model_building_report', 'planning_report']):
+        """
+
+        Args:
+            output_artifacts ():
+            display_list ():
+
+        Returns:
+
+        """
         outputs = {}
         print('Listing all the output artifacts from the session:\n')
         for key, value in output_artifacts.__fields__.items():

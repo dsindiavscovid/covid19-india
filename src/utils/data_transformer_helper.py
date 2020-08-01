@@ -1,6 +1,7 @@
 import collections.abc
 
 import pandas as pd
+import pydantic
 
 from entities.forecast_variables import ForecastVariable
 
@@ -142,9 +143,6 @@ def flatten_eval_loss_config(config):
 
 
 def get_observations_subset(df_actual, start_date=None, end_date=None):
-    print("get_subset")
-    print(df_actual)
-    print(df_actual.columns)
     df_actual = df_actual.set_index('observation')
     df_actual = df_actual.transpose().reset_index()
     if start_date is not None:
@@ -157,6 +155,7 @@ def get_observations_subset(df_actual, start_date=None, end_date=None):
         end = df_actual.index.max()
     df_actual = df_actual[start: end + 1]
     df_actual['index'] = pd.to_datetime(df_actual['index'])
+    df_actual.reset_index(inplace=True)
 
     return df_actual
 
@@ -173,3 +172,13 @@ def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
     init_observations_df.fillna(0, inplace=True)
     df_predictions = pd.concat([init_observations_df, df_predictions], axis=0, ignore_index=True)
     return df_predictions
+
+
+def pydantic_to_dict(obj):
+    return_dict = dict()
+    for k, v in obj.__fields__.items():
+        if isinstance(v, pydantic.fields.ModelField):
+            return_dict[k] = obj.__getattribute__(k)
+        else:
+            return_dict[k] = v
+    return return_dict

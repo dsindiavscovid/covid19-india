@@ -174,7 +174,14 @@ def get_actual_smooth(region_type, region_name, data_source, input_filepath, sta
     df_smoothed = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
                                                                 smooth=True, filepath=input_filepath)
 
-    # Get actual and smoothed observations in the correct ranges
-    df["actual"] = get_observations_subset(df_actual, start_date, end_date)
-    df["smoothed"] = get_observations_subset(df_smoothed, start_date, end_date)
-    return df
+    # print("1")
+    # print(df_actual.columns)
+    #
+    # # Get actual and smoothed observations in the correct ranges
+    # df["actual"] = get_observations_subset(df_actual, start_date, end_date)
+    # df["smoothed"] = get_observations_subset(df_smoothed, start_date, end_date)
+    # print('2')
+    # print(df['actual'])
+    # print(df['actual'].columns)
+
+    return {'actual': df_actual, 'smoothed': df_smoothed}

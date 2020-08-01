@@ -1,3 +1,7 @@
+"""
+Plotting module
+"""
+
 import os
 from copy import deepcopy
 
@@ -6,7 +10,6 @@ import seaborn as sns
 from adjustText import adjust_text
 from entities.forecast_variables import ForecastVariable
 from matplotlib import pyplot as plt, dates as mdates
-from modules.data_fetcher_module import DataFetcherModule
 
 
 plot_colors = {
@@ -25,12 +28,26 @@ plot_labels = {
 
 
 def plot_format(ax):
+    """Formats plot axes
+
+    Args:
+        ax (axes.Axes): axes object
+
+    """
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
     ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
 
 
 def plot_vertical_lines(ax, vertical_lines):
+    """Plot vertical lines to mark specific events
+
+    Args:
+        ax (axes.Axes): axes object
+        vertical_lines (list): list of dict of vertical lines to be included in the plot of the form
+            [{'date': date, 'color': color, 'label': label}]
+
+    """
     if vertical_lines is not None:
         for line in vertical_lines:
             ax.axvline(x=pd.to_datetime(line['date']), ls=':', color=line['color'], label=line['label'])
@@ -401,41 +418,16 @@ def distribution_plots(trials, variable, output_dir=''):
                  title=f'PDF and CDF for {variable}', path=os.path.join(output_dir, 'm2_distribution.png'))
 
 
-def plot_data(region, region_type, dir_name, variables=None, dir_prefix='../notebooks', data_source=None,
-              data_path=None, plot_name='default.png', csv_name='csv_cnt_data.csv'):
+def plot_data(region_name, df_actual, variables=None, plot_path=''):
+    """Plot actual observations
 
-    if variables is None:
-        variables = [var.name for var in ForecastVariable.input_variables()]
+    Args:
+        region_name (str): name of region
+        df_actual (pd.DataFrame): actual observations
+        variables (list, optional): list of variables to plot (default: None)
+        plot_path (str, optional): path to save plot (default: '')
 
-    actual = DataFetcherModule.get_observations_for_region(region_type, region, data_source=data_source,
-                                                           filepath=data_path, smooth=False)
-    actual.drop(columns=['region_name', 'region_type'], inplace=True)
-    actual = actual.set_index('observation').transpose().reset_index()
-    actual['index'] = pd.to_datetime(actual['index'])
-    actual = actual.loc[~ (actual.select_dtypes(include=['number']) == 0).all(axis='columns'), :]
-    csv_path = os.path.join(dir_prefix, dir_name, csv_name)
-    actual.to_csv(csv_path, index=False)
-
-    fig, ax = plt.subplots(figsize=(16, 12))
-
-    for variable in variables:
-        ax.plot(actual['index'], actual[variable], 'o-',
-                color=plot_colors[variable], label=plot_labels[variable])
-
-    plot_format(ax)
-
-    plt.title(region)
-    plt.ylabel('Case counts')
-    plt.xlabel('Time')
-    plt.xticks(rotation=45)
-    plt.legend()
-    plt.grid()
-
-    plot_path = os.path.join(dir_prefix, dir_name, plot_name)
-    plt.savefig(plot_path)
-
-
-def plot_data_new(region_name, df_actual, variables=None, plot_path=''):
+    """
 
     if variables is None:
         variables = [var.name for var in ForecastVariable.input_variables()]

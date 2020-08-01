@@ -1,10 +1,10 @@
-import yaml
-
 import chevron
 import pandas as pd
+import pprint
 
 
 def create_report(params, metrics, artifact_list, template_path='template.mustache', report_path='report.md'):
+
     params = {'_'.join(['params', k]): v for k, v in params.items()}
     metrics = {'_'.join(['metrics', k]): v for k, v in metrics.items()}
     artifact_list = {'_'.join(['artifact_list', k]): v for k, v in artifact_list.items()}
@@ -18,7 +18,7 @@ def create_report(params, metrics, artifact_list, template_path='template.mustac
         if isinstance(v, pd.DataFrame):
             template_inputs[k] = v.to_markdown()
         if isinstance(v, dict):
-            template_inputs[k] = yaml.dump(v)
+            template_inputs[k] = pprint.pformat(v, indent=4)
 
     with open(template_path, 'r') as f:
         report = chevron.render(f, template_inputs)

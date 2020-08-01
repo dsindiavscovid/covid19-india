@@ -15,8 +15,8 @@ def evaluate_for_forecast(observations, predictions_df, loss_functions: List[Los
         value = 0
         for variable, weight in loss_function.weights.items():
             value += weight * (
-                getattr(metrics_util, loss_function.metric_name.name)(actual_df[variable.name].values,
-                                                                      predictions_df[variable.name].values))
+                getattr(metrics_util, loss_function.metric_name.name)(actual_df[variable].values,
+                                                                      predictions_df[variable].values))
         loss_function.value = value
         metrics_results.append(loss_function.dict())
     return metrics_results
