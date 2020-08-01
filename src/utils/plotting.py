@@ -251,9 +251,8 @@ def pdf_cdf_plot(variable, case_counts, cdf, pdf=None, case_counts_pdf=None, use
         plt.savefig(path)
 
 
-def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_test,
-             train1_start_date, test1_start_date, output_artifacts, column_tags=None, variables=None, output_dir='',
-             verbose=False):
+def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predictions_test, train1_start_date,
+             test1_start_date, output_artifacts, column_tags=None, variables=None, verbose=False):
     """Creates all M1 plots
 
     Args:
@@ -299,8 +298,7 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
 
 
 def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_start_date, output_artifacts,
-             column_tags=None,
-             variables=None, output_dir='', verbose=False):
+             column_tags=None, variables=None, verbose=False):
     """Creates all M2 plots
 
     Args:
@@ -311,7 +309,6 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
         train2_start_date (str): start date for train2 interval
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
-        output_dir (str, optional): output directory path (default: '')
         verbose (bool, optional): if True, include additional plotting (uncertainty during training)
 
     """
@@ -339,10 +336,9 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
                                         title=f'{region_name}: M2 fit - {variable}', path=path, verbose=verbose)
 
 
-def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_forecast,
-                      train2_start_date, forecast_start_date, output_artifacts, column_tags=None, variables=None,
-                      output_dir='',
-                      verbose=False, scenario=None):
+def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_forecast, train2_start_date,
+                      forecast_start_date, output_artifacts, column_tags=None, variables=None, verbose=False,
+                      scenario=None):
     """Creates all M2 forecast plots
 
     Args:
@@ -354,7 +350,6 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
         forecast_start_date (str): start date for forecast interval
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
-        output_dir (str, optional): output directory path (default: '')
         verbose (bool, optional): if True, include additional plotting (uncertainty during training)
         scenario (str, optional): scenario name (default: None)
 
@@ -391,13 +386,12 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
                                             vertical_lines=vertical_lines, title=title, path=path, verbose=verbose)
 
 
-def distribution_plots(trials, variable, output_artifacts, output_dir=''):
+def distribution_plots(trials, variable, output_artifacts):
     """Create PDF and CDF plots
 
     Args:
         trials (pd.DataFrame): dataframe consisting of case counts, PDF and CDF for a variable
         variable (str): variable to plot
-        output_dir (str, optional): output directory path (default: '')
 
     """
     trials_new = deepcopy(trials)
@@ -410,7 +404,7 @@ def distribution_plots(trials, variable, output_artifacts, output_dir=''):
         case_counts_pdf.extend([trials_new.iloc[i, :]['case_counts']] * trials_new.iloc[i, :]['pdf'])
 
     pdf_cdf_plot(variable, trials['case_counts'], trials['cdf'], case_counts_pdf=case_counts_pdf,
-                 title=f'PDF and CDF for {variable}', path=os.path.join(output_dir, 'm2_distribution.png'))
+                 title=f'PDF and CDF for {variable}', path=output_artifacts['plot_planning_pdf_cdf'])
 
 
 def plot_data(region_name, df_actual, variables=None, plot_path=''):

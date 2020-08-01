@@ -459,14 +459,9 @@ class ModelBuildingSession(BaseModel):
                                                                                 output_artifacts.M1_model_params,
                                                                                 "forecast", output_dir)
 
-        # TODO: need to get this right from output_artifacts
-        # How do we make sure the names given in the plots correspond to the ones in output_artifact keys?
-        # for now we are just passing output_dir
-        output_dir = "/".join(output_artifacts.plot_M2_CARD.split("/")[0:-1])
-
         # Get actual and smoothed observations in correct ranges
-        df_m1 = DataFetcherModule.get_actual_smooth(region_type, region_name, data_source, input_filepath)
-        df_m2 = DataFetcherModule.get_actual_smooth(region_type, region_name, data_source, input_filepath)
+        df_m1 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath)
+        df_m2 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath)
 
         # M1 train
         if verbose:
@@ -535,13 +530,13 @@ class ModelBuildingSession(BaseModel):
         # Create M1, M2, M2 forecast plots
         m1_plots(region_name_str, df_m1_plot["actual"], df_m1_plot["smoothed"], df_predictions_train_m1,
                  df_predictions_test_m1, train1_start_date, test_start_date, pydantic_to_dict(output_artifacts),
-                 column_tags=column_tags, output_dir=output_dir, verbose=verbose)
+                 column_tags=column_tags, verbose=verbose)
         m2_plots(region_name_str, df_m2_plot["actual"], df_m2_plot["smoothed"], df_predictions_train_m2,
                  train2_start_date, pydantic_to_dict(output_artifacts),
-                 column_tags=column_tags, output_dir=output_dir, verbose=verbose)
+                 column_tags=column_tags, verbose=verbose)
         m2_forecast_plots(region_name_str, df_m2_plot["actual"], df_m2_plot["smoothed"], df_predictions_forecast_m2,
                           train2_start_date, forecast_start_date, pydantic_to_dict(output_artifacts),
-                          column_tags=column_tags, output_dir=output_dir, verbose=False)
+                          column_tags=column_tags, verbose=False)
 
         # Get trials dataframe
         region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source=data_source)
@@ -550,8 +545,7 @@ class ModelBuildingSession(BaseModel):
         trials = M2_model.get_trials_distribution(region_metadata, df_m2["actual"], forecast_run_day,
                                                   forecast_start_date, forecast_end_date)
         # Plot PDF and CDF
-        distribution_plots(trials, uncertainty_parameters['variable_of_interest'], pydantic_to_dict(output_artifacts),
-                           output_dir=output_dir)
+        distribution_plots(trials, uncertainty_parameters['variable_of_interest'], pydantic_to_dict(output_artifacts))
 
     @staticmethod
     def flexible_forecast(actual, model_params, forecast_run_day, forecast_start_date, forecast_end_date,
@@ -634,11 +628,8 @@ class ModelBuildingSession(BaseModel):
         dates = compute_dates(time_interval_config)['direct']
 
         # 2. get the relevant data
-        # TODO: if this is a frequent enough coupled call, we should merge this into a new function in DataFetcher
-        region_observations = DataFetcherModule.get_observations_for_region(region_type, [region_name],
-                                                                            data_source=data_source,
-                                                                            filepath=input_data_file)
-        region_metadata = DataFetcherModule.get_regional_metadata(region_type, [region_name], data_source=data_source)
+        regional_data = DataFetcherModule.get_regional_data(region_type, [region_name], data_source=data_source,
+                                                            input_filepath=input_data_file)
 
         # 3. get the representative model for the chosen planning level
         # TODO: Is this always a single percentile?
@@ -648,7 +639,7 @@ class ModelBuildingSession(BaseModel):
             variable_of_interest=uncertainty_parameters['variable_of_interest'],
             date_of_interest=uncertainty_parameters['date_of_interest'],
             tolerance=uncertainty_parameters['tolerance'], percentiles=planning_percentile,
-            region_metadata=region_metadata, region_observations=region_observations,
+            region_metadata=regional_data['metadata'], region_observations=regional_data['actual'],
             run_day=dates['forecast_run_day'], start_date=dates['forecast_start_date'],
             end_date=dates['forecast_end_date'])
 
@@ -700,18 +691,13 @@ class ModelBuildingSession(BaseModel):
             staffing_df.to_csv(output_artifacts.__getattribute__(staff_matrix_file_key), index=False)
 
             # generate and save the plots (only CARDs)
-            plot_file_key = "plot_M2_" + case_name + "_CARD"
-            plot_path = output_artifacts.__getattribute__(plot_file_key)
             df = ModelBuildingSession._generate_forecast_plot_data(region_type, region_name, data_source,
-                                                                   input_data_file, forecasting_output,
-                                                                   dates)
-            # TODO: splitting the plot_path is a bit awkward - check if it works
+                                                                   input_data_file, forecasting_output, dates)
             # Is there an option in the function for only CARD plots
             m2_forecast_plots(region_name, df["actual_m2"], df["smoothed_m2"], df["predictions_forecast_m2"],
-                              dates["train2_start_date"],
-                              dates["forecast_start_date"], pydantic_to_dict(output_artifacts),
-                              column_tags=['mean'], output_dir="/".join(plot_path.split("/")[:-1]),
-                              verbose=False, scenario=case_name)
+                              dates["train2_start_date"], dates["forecast_start_date"],
+                              pydantic_to_dict(output_artifacts), column_tags=['mean'], verbose=False,
+                              scenario=case_name)
 
         outputs['metrics'] = metrics
         return outputs
@@ -748,8 +734,7 @@ class ModelBuildingSession(BaseModel):
         metrics_to_log = pydantic_to_dict(self.metrics)
         output_artifacts_to_log = pydantic_to_dict(self.output_artifacts)
         outputs = ModelBuildingSession.log_session_static(params_to_log, metrics_to_log, output_artifacts_to_log,
-                                                          self.params.experiment_name,
-                                                          self.params.session_name)
+                                                          self.params.experiment_name, self.params.session_name)
         return
 
     @staticmethod
@@ -761,8 +746,7 @@ class ModelBuildingSession(BaseModel):
         # outputs['flattened_artifacts'] = merge_dicts([flatten(input_artifacts), flatten(output_artifacts)])
         outputs['flattened_artifacts'] = flatten(output_artifacts)
         mlflow_logger.log_to_mlflow(outputs['flattened_params'], outputs['flattened_metrics'],
-                                    outputs['flattened_artifacts'],
-                                    experiment_name, session_name)
+                                    outputs['flattened_artifacts'], experiment_name, session_name)
         return outputs
 
     # TODO: not a clean function but just put this together to clean up the main calls
@@ -773,19 +757,12 @@ class ModelBuildingSession(BaseModel):
         # TODO: check do we need this ?
         forecasting_output = forecasting_output.reset_index()
 
-        # TODO: the data creation lines here could all be put into a single routine as well
-        df = {"actual": DataFetcherModule.get_observations_for_region(region_type, [region_name],
-                                                                      data_source=data_source,
-                                                                      smooth=False, filepath=input_data_file),
-              "smoothed": DataFetcherModule.get_observations_for_region(region_type, [region_name],
-                                                                        data_source=data_source, smooth=True,
-                                                                        filepath=input_data_file)}
+        df = DataFetcherModule.get_actual_smooth_for_region(region_type, [region_name], data_source=data_source,
+                                                            input_filepath=input_data_file)
 
-        # TODO: is there some hard coding here - what is days=7 or is it  just a simple shift?
-        plot_start_date_m2 = get_date(time_interval_config["train2_start_date"], -7)
-        df["actual_m2"] = get_observations_subset(df["actual"], plot_start_date_m2,
+        df["actual_m2"] = get_observations_subset(df["actual"], time_interval_config['plot_start_date_m2'],
                                                   time_interval_config["train2_end_date"])
-        df["smoothed_m2"] = get_observations_subset(df["smoothed"], plot_start_date_m2,
+        df["smoothed_m2"] = get_observations_subset(df["smoothed"], time_interval_config['plot_start_date_m2'],
                                                     time_interval_config["train2_end_date"])
 
         df["predictions_forecast_m2"] = add_init_observations_to_predictions(df["actual"], forecasting_output,
