@@ -85,6 +85,7 @@ class ModelBuildingSessionParams(BaseModel):
     staffing: dict
     publish_flag: bool = True
     comments: str = ''
+    input_artifacts: List
 
 
 class ModelBuildingSessionMetrics(BaseModel):

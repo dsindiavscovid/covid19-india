@@ -12,7 +12,7 @@ from configs.base_config import TrainingModuleConfig, ModelEvaluatorConfig, Fore
 from configs.model_building_session_config import ModelBuildingSessionOutputArtifacts, ModelBuildingSessionParams, \
     ModelBuildingSessionMetrics
 from general_utils import create_output_folder, render_artifact, merge_dicts, set_dict_field, \
-    get_dict_field, generate_forecast_plot_data, get_actual_smooth, compute_dates
+    get_dict_field, get_actual_smooth, compute_dates
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
@@ -223,7 +223,8 @@ class ModelBuildingSession(BaseModel):
                                          time_interval_config,
                                          model_class, model_parameters, train_loss_function, search_space,
                                          search_parameters,
-                                         eval_loss_functions, uncertainty_parameters, model_file, operation, output_dir):
+                                         eval_loss_functions, uncertainty_parameters, model_file, operation,
+                                         output_dir):
 
         cfg = dict()
 
@@ -245,9 +246,6 @@ class ModelBuildingSession(BaseModel):
             # set all the learning elements
             # TODO: make sure the module configs and the default session config are consistent
             # items to rename in the configs and also the corresponding modules
-            # training_loss_function --> train_loss function
-            # loss_functions --> eval_loss_functions
-            # n -> top_k_models_considered
             # run_day --> test_run_day or forecast_run_day
             # remove forecast_variables from forecasting module config ??
             cfg['model_parameters'] = model_parameters
@@ -733,8 +731,9 @@ class ModelBuildingSession(BaseModel):
             # generate and save the plots (only CARDs)
             plot_file_key = "plot_M2_" + case_name + "_CARD"
             plot_path = output_artifacts.__getattribute__(plot_file_key)
-            df = generate_forecast_plot_data(region_type, region_name, data_source, input_data_file, forecasting_output,
-                                             dates)
+            df = ModelBuildingSession._generate_forecast_plot_data(region_type, region_name, data_source,
+                                                                   input_data_file, forecasting_output,
+                                                                   dates)
             # TODO: splitting the plot_path is a bit awkward -check if it works
             # Is there an option in the function for only CARD plots
             m2_forecast_plots(region_name, df["actual_m2"], df["smoothed_m2"], df["predictions_forecast_m2"],
@@ -773,17 +772,53 @@ class ModelBuildingSession(BaseModel):
 
     def log_session(self):
         self._validate_params_for_function('log_session')
-        outputs = ModelBuildingSession.log_session_static(self.params, self.metrics,
-                                                          self.output_artifacts, self.params.experiment_name,
+        # Todo: Is this necessary? Can we flatten a pydantic object before logging?
+        params_to_log = pydantic_to_dict(self.params)
+        metrics_to_log = pydantic_to_dict(self.metrics)
+        output_artifacts_to_log = pydantic_to_dict(self.output_artifacts)
+        outputs = ModelBuildingSession.log_session_static(params_to_log, metrics_to_log, output_artifacts_to_log,
+                                                          self.params.experiment_name,
                                                           self.params.session_name)
         return
 
     @staticmethod
     def log_session_static(params, metrics, output_artifacts, experiment_name, session_name):
+        # Todo: Check for non-numeric types for metrics
         outputs = {'flattened_params': flatten(params), 'flattened_metrics': flatten(metrics)}
-        input_artifacts = {(k, params[k]) for k in params['input_artifacts']}
-        outputs['flattened_artifacts'] = merge_dicts([flatten(input_artifacts), flatten(output_artifacts)])
+        # TODO: Locate input artifacts in params? Or specify full path in session_config and use get_field?
+        # input_artifacts = {(k, params[k]) for k in params['input_artifacts']}
+        # outputs['flattened_artifacts'] = merge_dicts([flatten(input_artifacts), flatten(output_artifacts)])
+        outputs['flattened_artifacts'] = flatten(output_artifacts)
         mlflow_logger.log_to_mlflow(outputs['flattened_params'], outputs['flattened_metrics'],
                                     outputs['flattened_artifacts'],
                                     experiment_name, session_name)
         return outputs
+
+    # TODO: not a clean function but just put this together to clean up the main calls
+    # Need to decide where this goes as well
+    @staticmethod
+    def _generate_forecast_plot_data(region_type, region_name, data_source, input_data_file, forecasting_output,
+                                     time_interval_config):
+        # TODO: check do we need this ?
+        forecasting_output = forecasting_output.reset_index()
+
+        # TODO: the data creation lines here could all be put into a single routine as well
+        df = {"actual": DataFetcherModule.get_observations_for_region(region_type, [region_name],
+                                                                      data_source=data_source,
+                                                                      smooth=False, filepath=input_data_file),
+              "smoothed": DataFetcherModule.get_observations_for_region(region_type, [region_name],
+                                                                        data_source=data_source, smooth=True,
+                                                                        filepath=input_data_file)}
+
+        # TODO: is there some hard coding here - what is days=7 or is it  just a simple shift?
+        plot_start_date_m2 = get_date(time_interval_config["train2_start_date"], -7)
+        df["actual_m2"] = get_observations_subset(df["actual"], plot_start_date_m2,
+                                                  time_interval_config["train2_end_date"])
+        df["smoothed_m2"] = get_observations_subset(df["smoothed"], plot_start_date_m2,
+                                                    time_interval_config["train2_end_date"])
+
+        df["predictions_forecast_m2"] = add_init_observations_to_predictions(df["actual"], forecasting_output,
+                                                                             time_interval_config["forecast_run_day"])
+        df["predictions_forecast_m2"]['date'] = pd.to_datetime(df["predictions_forecast_m2"]['date'], format='%m/%d/%y')
+
+        return df

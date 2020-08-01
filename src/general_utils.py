@@ -1,10 +1,8 @@
 import os
 from datetime import datetime
 
-import pandas as pd
 from IPython.display import Markdown, display
 from modules.data_fetcher_module import DataFetcherModule
-from utils.data_transformer_helper import get_observations_subset, add_init_observations_to_predictions
 from utils.time import get_date
 
 
@@ -92,35 +90,6 @@ def flatten(d):
     return d_flat
 
 
-# TODO: not a clean function but just put this together to clean up the main calls
-# Need to decide where this goes as well
-def generate_forecast_plot_data(region_type, region_name, data_source, input_data_file, forecasting_output,
-                                time_interval_config):
-    # TODO: check do we need this ?
-    forecasting_output = forecasting_output.reset_index()
-
-    # TODO: the data creation lines here could all be put into a single routine as well
-    df = {"actual": DataFetcherModule.get_observations_for_region(region_type, [region_name],
-                                                                  data_source=data_source,
-                                                                  smooth=False, filepath=input_data_file),
-          "smoothed": DataFetcherModule.get_observations_for_region(region_type, [region_name],
-                                                                    data_source=data_source, smooth=True,
-                                                                    filepath=input_data_file)}
-
-    # TODO: is there some hard coding here - what is days=7 or is it  just a simple shift?
-    plot_start_date_m2 = get_date(time_interval_config["train2_start_date"], -7)
-    df["actual_m2"] = get_observations_subset(df["actual"], plot_start_date_m2,
-                                              time_interval_config["train2_end_date"])
-    df["smoothed_m2"] = get_observations_subset(df["smoothed"], plot_start_date_m2,
-                                                time_interval_config["train2_end_date"])
-
-    df["predictions_forecast_m2"] = add_init_observations_to_predictions(df["actual"], forecasting_output,
-                                                                         time_interval_config["forecast_run_day"])
-    df["predictions_forecast_m2"]['date'] = pd.to_datetime(df["predictions_forecast_m2"]['date'], format='%m/%d/%y')
-
-    return df
-
-
 def compute_dates(time_interval_config):
     """
           Compute all the dates in time_interval_config in a consistent way
@@ -144,7 +113,6 @@ def compute_dates(time_interval_config):
         else:  # Added
             d0 = time_interval_config["offset_based"]["reference_day"]
         # compute the direct_mode dates based on this
-        offsets = time_interval_config
         d = {}
         offsets = time_interval_config["offset_based"]
         d["forecast_end_date"] = get_date(d0, offsets["forecast_period"])
@@ -168,20 +136,9 @@ def compute_dates(time_interval_config):
 
 
 def get_actual_smooth(region_type, region_name, data_source, input_filepath, start_date, end_date):
-    df = {}
     df_actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
                                                               smooth=False, filepath=input_filepath)
     df_smoothed = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
                                                                 smooth=True, filepath=input_filepath)
-
-    # print("1")
-    # print(df_actual.columns)
-    #
-    # # Get actual and smoothed observations in the correct ranges
-    # df["actual"] = get_observations_subset(df_actual, start_date, end_date)
-    # df["smoothed"] = get_observations_subset(df_smoothed, start_date, end_date)
-    # print('2')
-    # print(df['actual'])
-    # print(df['actual'].columns)
 
     return {'actual': df_actual, 'smoothed': df_smoothed}
