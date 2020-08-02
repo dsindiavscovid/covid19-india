@@ -259,8 +259,10 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             only_beta_search_space = dict()
             only_beta_search_space['beta'] = search_space['beta']
             # TODO: Which search parameters do we pass here
-            return super().train(region_metadata, region_observations, train_start_date,
+            betaResults =  super().train(region_metadata, region_observations, train_start_date,
                                  train_end_date, only_beta_search_space, search_parameters, train_loss_function)
+            betaResults['param_ranges'] = self.get_statistics_of_params()
+            return betaResults
         elif self.model_parameters['modes']['training_mode'] == 'constituent_models':
             if 'beta' in search_space.keys():
                 search_space.pop('beta')
@@ -296,7 +298,9 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                                          train_end_date, only_beta_search_space, search_parameters["ensemble_model"],
                                          train_loss_function)
             self.model_parameters.update(results_beta['model_parameters'])
-            return {"model_parameters": self.model_parameters}
+            results_beta['model_parameters'] = self.model_parameters
+            results_beta['param_ranges'] = self.get_statistics_of_params()
+            return results_beta
 
     def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                 end_date: str, **kwargs):

@@ -12,6 +12,7 @@ from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
 from utils.ensemble_util import get_weighted_predictions, create_trials_dataframe, uncertainty_dict_to_df, get_weights
 from utils.hyperparam_util import hyperparam_tuning
 from utils.loss_util import evaluate_for_forecast
+from utils.data_transformer_helper import flatten
 
 
 class HeterogeneousEnsemble(ModelWrapperBase):
@@ -64,7 +65,30 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         model_params.update(result["best_params"])
         model_params["MAPE"] = result["best_loss"]
         result["model_parameters"] = model_params
-        return {"model_parameters": model_params}
+        
+        if('uncertainty_parameters' in self.model_parameters.keys()):    
+            uncertainty_params = self.model_parameters['uncertainty_parameters']
+            date_of_interest = uncertainty_params['date_of_interest']
+            variable_of_interest = uncertainty_params['variable_of_interest']
+            include_mean = uncertainty_params['include_mean']
+            percentiles = uncertainty_params['percentiles']
+            ci = uncertainty_params['confidence_interval_sizes']
+            confidence_intervals = []
+            for c in ci:
+                percentiles.extend([50 - c / 2, 50 + c / 2])
+            tolerance = uncertainty_params['tolerance']
+            
+            paramDict = self.get_params_for_percentiles(variable_of_interest, date_of_interest, tolerance, percentiles,
+                                       region_metadata, region_observations, run_day, train_start_date, date_of_interest)
+            newDict = dict()
+            for k, i in paramDict.items():
+                newDict[str(k)+' percentile'] = flatten(i)
+            paramDf = pd.DataFrame.from_dict(newDict)
+        else:
+            paramDf = pd.DataFrame()
+            
+            
+        return {"model_parameters": model_params, "trials" : result['trials'], "percentile_parameters": paramDf}
 
     def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
                  loss_function, precomputed_pred=None):
