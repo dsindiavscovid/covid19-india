@@ -9,6 +9,7 @@ from entities.loss_function import LossFunction
 from hyperopt import hp
 from model_wrappers import model_factory as model_factory_alias
 from model_wrappers.base import ModelWrapperBase
+from utils.data_util import flatten
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
 from utils.hyperparam_util import hyperparam_tuning
 from utils.metrics_util import evaluate_for_forecast
@@ -114,7 +115,28 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         model_params.update(result["best_params"])
         model_params["MAPE"] = result["best_loss"]
         result["model_parameters"] = model_params
-        return {"model_parameters": model_params}
+
+        if 'uncertainty_parameters' in self.model_parameters.keys():
+            uncertainty_params = self.model_parameters['uncertainty_parameters']
+            date_of_interest = uncertainty_params['date_of_interest']
+            variable_of_interest = uncertainty_params['variable_of_interest']
+            percentiles = uncertainty_params['percentiles']
+            ci = uncertainty_params['confidence_interval_sizes']
+            for c in ci:
+                percentiles.extend([50 - c / 2, 50 + c / 2])
+            tolerance = uncertainty_params['tolerance']
+
+            param_dict = self.get_params_for_percentiles(variable_of_interest, date_of_interest, tolerance, percentiles,
+                                                         region_metadata, region_observations, run_day,
+                                                         train_start_date, date_of_interest)
+            new_dict = dict()
+            for k, i in param_dict.items():
+                new_dict[str(k) + ' percentile'] = flatten(i)
+            param_df = pd.DataFrame.from_dict(new_dict)
+        else:
+            param_df = pd.DataFrame()
+
+        return {"model_parameters": model_params, "trials": result['trials'], "percentile_parameters": param_df}
 
     def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
                  loss_function, precomputed_pred=None):
@@ -383,7 +405,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         return df_output
 
     @staticmethod
-    def _create_trials_dataframe(predictions_df_dict, column=ForecastVariable.active):
+    def _create_trials_dataframe(predictions_df_dict, column=ForecastVariable.active.name):
         """Create dataframe of predictions for a single forecast variable from all constituent models
 
         Args:

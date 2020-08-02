@@ -12,5 +12,5 @@ class VariableWeight(BaseModel):
 
 class LossFunction(BaseModel):
     metric_name: MetricName
-    weights: Dict[ForecastVariable, int]
+    weights: Dict[ForecastVariable, float]
     value: float = 0.0

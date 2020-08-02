@@ -10,6 +10,7 @@ from entities.model_class import ModelClass
 from hyperopt import hp
 from model_wrappers import model_factory as model_factory_alias
 from model_wrappers.heterogeneous_ensemble import HeterogeneousEnsemble
+from utils.data_util import flatten
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
 from utils.hyperparam_util import hyperparam_tuning_ensemble
 
@@ -27,48 +28,6 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                 temp_model = model_parameters['constituent_models'][key]
                 if self.child_model_class != temp_model['model_class']:
                     raise Exception("Constituent Models not homogenous! Model Class differs.")
-
-    def _flatten_dict(self, old_dict, append_str=""):
-        new_dict = dict()
-        for key in old_dict.keys():
-            if type(old_dict[key]) == dict:
-                new_dict.update(self._flatten_dict(old_dict[key], append_str + key + "_"))
-            else:
-                if isinstance(old_dict[key], float) or isinstance(old_dict[key], int):
-                    new_dict[append_str + key] = old_dict[key]
-        return new_dict
-
-    def _get_statistics_given_indexes(self, list_of_indexes, append_str):
-        if len(list_of_indexes) <= 0:
-            return pd.DataFrame()
-        list_of_params = dict()
-        for idx in list_of_indexes:
-            list_of_params[idx] = (self._flatten_dict(self.models[idx].model_parameters))
-
-        keys = list(list_of_params[list_of_indexes[0]].keys())
-
-        beta = float(self.model_parameters['beta'])
-        if self.weights is None:
-            weights = HeterogeneousEnsemble._get_weights(beta, self.losses)
-        else:
-            weights = copy.deepcopy(self.weights)
-        s = 0
-        for idx in list_of_indexes:
-            s += weights[idx]
-        for idx in weights.keys():
-            weights[idx] = weights[idx] / s
-        mean = dict()
-        mini = dict()
-        maxi = dict()
-        mean['statName'] = append_str + "Mean"
-        mini['statName'] = append_str + "Min"
-        maxi['statName'] = append_str + "Max"
-        for key in keys:
-            mean[key] = np.sum([list_of_params[idx][key] * weights[idx] for idx in list_of_indexes])
-            mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
-            maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
-
-        return [mean, mini, maxi]
 
     def supported_forecast_variables(self):
         return [ForecastVariable.confirmed, ForecastVariable.recovered, ForecastVariable.active]
@@ -161,6 +120,40 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
 
         return percentiles_params
 
+    def _get_statistics_given_indexes(self, list_of_indexes, append_str):
+        if len(list_of_indexes) <= 0:
+            return pd.DataFrame()
+        list_of_params = dict()
+        for idx in list_of_indexes:
+            list_of_params[idx] = (flatten(self.models[idx].model_parameters))
+
+        keys = list(list_of_params[list_of_indexes[0]].keys())
+
+        beta = float(self.model_parameters['beta'])
+        if self.weights is None:
+            weights = HeterogeneousEnsemble._get_weights(beta, self.losses)
+        else:
+            weights = copy.deepcopy(self.weights)
+        s = 0
+        for idx in list_of_indexes:
+            s += weights[idx]
+        for idx in weights.keys():
+            weights[idx] = weights[idx] / s
+        mean = dict()
+        mini = dict()
+        maxi = dict()
+        mean['statName'] = append_str + "Mean"
+        mini['statName'] = append_str + "Min"
+        maxi['statName'] = append_str + "Max"
+        for key in keys:
+            if (isinstance(list_of_params[list_of_indexes[0]][key], float)
+                    or isinstance(list_of_params[list_of_indexes[0]][key], int)):
+                mean[key] = np.sum([list_of_params[idx][key] * weights[idx] for idx in list_of_indexes])
+                mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
+                maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
+
+        return [mean, mini, maxi]
+
     def get_statistics_of_params(self, output_file_location=None):
         sorted_loss_indexes = [item[0] for item in sorted(self.losses.items(), key=lambda kv: (kv[1], kv[0]))]
 
@@ -175,7 +168,9 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
 
         if output_file_location is not None:
             stats_df.to_csv(output_file_location)
-        return stats_df
+        stats_df = stats_df.set_index('statName')
+        stats_df.index.name = ''
+        return stats_df.transpose()
 
     def predict_from_mean_param(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
                                 start_date: str,
@@ -263,8 +258,10 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             only_beta_search_space = dict()
             only_beta_search_space['beta'] = search_space['beta']
             # TODO: Which search parameters do we pass here
-            return super().train(region_metadata, region_observations, train_start_date,
-                                 train_end_date, only_beta_search_space, search_parameters, train_loss_function)
+            betaResults = super().train(region_metadata, region_observations, train_start_date,
+                                        train_end_date, only_beta_search_space, search_parameters, train_loss_function)
+            betaResults['param_ranges'] = self.get_statistics_of_params()
+            return betaResults
         elif self.model_parameters['modes']['training_mode'] == 'constituent_models':
             if 'beta' in search_space.keys():
                 search_space.pop('beta')
@@ -300,7 +297,9 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                                          train_end_date, only_beta_search_space, search_parameters["ensemble_model"],
                                          train_loss_function)
             self.model_parameters.update(results_beta['model_parameters'])
-            return {"model_parameters": self.model_parameters}
+            results_beta['model_parameters'] = self.model_parameters
+            results_beta['param_ranges'] = self.get_statistics_of_params()
+            return results_beta
 
     def predict(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                 end_date: str, **kwargs):
