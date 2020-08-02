@@ -13,6 +13,7 @@ from model_wrappers.heterogeneous_ensemble import HeterogeneousEnsemble
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
 from utils.ensemble_util import uncertainty_dict_to_df
 from utils.hyperparam_util import hyperparam_tuning_ensemble
+from utils.data_transformer_helper import flatten
 
 
 class HomogeneousEnsemble(HeterogeneousEnsemble):
@@ -120,22 +121,12 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
 
         return percentiles_params
 
-    def _flatten_dict(self, old_dict, append_str=""):
-        new_dict = dict()
-        for key in old_dict.keys():
-            if type(old_dict[key]) == dict:
-                new_dict.update(self._flatten_dict(old_dict[key], append_str + key + "_"))
-            else:
-                if isinstance(old_dict[key], float) or isinstance(old_dict[key], int):
-                    new_dict[append_str + key] = old_dict[key]
-        return new_dict
-
     def _get_statistics_given_indexes(self, list_of_indexes, append_str):
         if len(list_of_indexes) <= 0:
             return pd.DataFrame()
         list_of_params = dict()
         for idx in list_of_indexes:
-            list_of_params[idx] = (self._flatten_dict(self.models[idx].model_parameters))
+            list_of_params[idx] = (flatten(self.models[idx].model_parameters))
 
         keys = list(list_of_params[list_of_indexes[0]].keys())
 
@@ -156,10 +147,12 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         mini['statName'] = append_str + "Min"
         maxi['statName'] = append_str + "Max"
         for key in keys:
-            mean[key] = np.sum([list_of_params[idx][key] * weights[idx] for idx in list_of_indexes])
-            mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
-            maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
-
+            if(isinstance(list_of_params[list_of_indexes[0]][key], float) 
+               or isinstance(list_of_params[list_of_indexes[0]][key], int)):
+                mean[key] = np.sum([list_of_params[idx][key] * weights[idx] for idx in list_of_indexes])
+                mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
+                maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
+            
         return [mean, mini, maxi]
 
     def get_statistics_of_params(self, output_file_location=None):
@@ -176,7 +169,9 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
 
         if output_file_location is not None:
             stats_df.to_csv(output_file_location)
-        return stats_df
+        stats_df = stats_df.set_index('statName')    
+        stats_df.index.name = ''
+        return stats_df.transpose()
 
     def predict_from_mean_param(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
                                 start_date: str,
