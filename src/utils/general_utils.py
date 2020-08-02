@@ -1,8 +1,6 @@
 import os
-from datetime import datetime
 
 from IPython.display import Markdown, display
-from utils.time import get_date
 
 
 def create_output_folder(dir_name, path_prefix):
@@ -11,7 +9,7 @@ def create_output_folder(dir_name, path_prefix):
     new_dir = os.path.join(path_prefix, dir_name)
     if os.path.isdir(new_dir):
         msg = (
-            f'{new_dir} already exists. Your content might get overwritten.'
+            f'{new_dir} already exists. Your content might get overwritten.\n'
             f'Please change the directory name to retain previous content'
         )
         print(msg)
@@ -87,48 +85,3 @@ def flatten(d):
     # val - type -data frame - create row/column keys
     # val - type -anything else - terminate and convert value to str
     return d_flat
-
-
-def compute_dates(time_interval_config):
-    """
-          Compute all the dates in time_interval_config in a consistent way
-    """
-
-    # Note: expectation is that either the user specifies ALL the dates in "direct" mode
-    # or we would populate it based on the offsets and reference day
-    is_direct_mode = True
-    for k in time_interval_config["direct"]:
-        if not time_interval_config["direct"][k]:
-            is_direct_mode = False
-            break
-
-    # if not direct/expert mode, reference_day is set to today if not specified by user
-    # and other dates in the direct mode are computed accordingly
-    if not is_direct_mode:
-
-        if not time_interval_config["offset_based"]["reference_day"]:
-            d0 = datetime.today().strftime("%-m/%-d/%y")
-            time_interval_config["offset_based"]["reference_day"] = d0
-        else:  # Added
-            d0 = time_interval_config["offset_based"]["reference_day"]
-        # compute the direct_mode dates based on this
-        d = {}
-        offsets = time_interval_config["offset_based"]
-        d["forecast_end_date"] = get_date(d0, offsets["forecast_period"])
-        d["forecast_run_day"] = get_date(d0, 0)
-        d["forecast_start_date"] = get_date(d0, 1)
-        d["test_end_date"] = get_date(d0, 0)
-        d["test_run_day"] = get_date(d0, -offsets["test_period"] - 1)
-        d["test_start_date"] = get_date(d0, -offsets["test_period"])
-        d["train1_end_date"] = get_date(d0, -offsets["test_period"] - 1)
-        d["train1_run_day"] = get_date(d0, -offsets["test_period"] - offsets["train_period"] - 2)
-        d["train1_start_date"] = get_date(d0, -offsets["test_period"] - offsets["train_period"] - 1)
-        d["train2_end_date"] = get_date(d0, 0)
-        d["train2_run_day"] = get_date(d0, -offsets["train_period"] - 1)
-        d["train2_start_date"] = get_date(d0, -offsets["train_period"])
-        d["plot_start_date_m1"] = get_date(d0, -offsets["test_period"] - offsets["train_period"] - offsets[
-            "plot_buffer"] - 1)
-        d["plot_start_date_m2"] = get_date(d0, -offsets["train_period"] - offsets["plot_buffer"])
-        time_interval_config["direct"] = d
-
-    return time_interval_config

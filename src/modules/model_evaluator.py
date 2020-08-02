@@ -2,8 +2,8 @@ from configs.base_config import ModelEvaluatorConfig
 from entities.model_class import ModelClass
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
-from utils.config_util import read_config_file
-from utils.loss_util import evaluate_for_forecast
+from utils.io import read_config_file
+from utils.metrics_util import evaluate_for_forecast
 
 
 class ModelEvaluator(object):

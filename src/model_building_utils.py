@@ -14,10 +14,10 @@ from modules.forecasting_module import ForecastingModule
 from nb_utils import train_eval_plot_ensemble
 from publishers.mlflow_logging import get_previous_runs, log_to_mlflow
 from publishers.report_generation import create_report
-from utils.data_transformer_helper import flatten_train_loss_config, flatten_eval_loss_config, flatten, \
+from utils.data_util import flatten_train_loss_config, flatten_eval_loss_config, flatten, \
     get_observations_subset, add_init_observations_to_predictions
 from utils.plotting import m2_forecast_plots, plot_data
-from utils.staffing import get_clean_staffing_ratio, compute_staffing_matrix
+from domain_info.staffing import get_clean_staffing_ratio, compute_staffing_matrix
 
 
 def create_session(session_name, user_name='guest'):

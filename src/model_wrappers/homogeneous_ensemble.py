@@ -11,7 +11,6 @@ from hyperopt import hp
 from model_wrappers import model_factory as model_factory_alias
 from model_wrappers.heterogeneous_ensemble import HeterogeneousEnsemble
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
-from utils.ensemble_util import uncertainty_dict_to_df
 from utils.hyperparam_util import hyperparam_tuning_ensemble
 
 
@@ -29,41 +28,83 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                 if self.child_model_class != temp_model['model_class']:
                     raise Exception("Constituent Models not homogenous! Model Class differs.")
 
+    def _flatten_dict(self, old_dict, append_str=""):
+        new_dict = dict()
+        for key in old_dict.keys():
+            if type(old_dict[key]) == dict:
+                new_dict.update(self._flatten_dict(old_dict[key], append_str + key + "_"))
+            else:
+                if isinstance(old_dict[key], float) or isinstance(old_dict[key], int):
+                    new_dict[append_str + key] = old_dict[key]
+        return new_dict
+
+    def _get_statistics_given_indexes(self, list_of_indexes, append_str):
+        if len(list_of_indexes) <= 0:
+            return pd.DataFrame()
+        list_of_params = dict()
+        for idx in list_of_indexes:
+            list_of_params[idx] = (self._flatten_dict(self.models[idx].model_parameters))
+
+        keys = list(list_of_params[list_of_indexes[0]].keys())
+
+        beta = float(self.model_parameters['beta'])
+        if self.weights is None:
+            weights = HeterogeneousEnsemble._get_weights(beta, self.losses)
+        else:
+            weights = copy.deepcopy(self.weights)
+        s = 0
+        for idx in list_of_indexes:
+            s += weights[idx]
+        for idx in weights.keys():
+            weights[idx] = weights[idx] / s
+        mean = dict()
+        mini = dict()
+        maxi = dict()
+        mean['statName'] = append_str + "Mean"
+        mini['statName'] = append_str + "Min"
+        maxi['statName'] = append_str + "Max"
+        for key in keys:
+            mean[key] = np.sum([list_of_params[idx][key] * weights[idx] for idx in list_of_indexes])
+            mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
+            maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
+
+        return [mean, mini, maxi]
+
     def supported_forecast_variables(self):
         return [ForecastVariable.confirmed, ForecastVariable.recovered, ForecastVariable.active]
 
-    def update_nested_dict(self, meandict, x, key,  w):
-        if(type(x) == dict):
-            if(key not in meandict.keys()):
+    def update_nested_dict(self, meandict, x, key, w):
+        if type(x) == dict:
+            if key not in meandict.keys():
                 meandict[key] = dict()
             for k in x.keys():
                 meandict[key] = self.update_nested_dict(meandict[key], x[k], k, w)
             return meandict
         else:
-            if(key in meandict.keys()):
-                if(isinstance(x, float) or isinstance(x, int)):
-                    meandict[key] += x*w
+            if key in meandict.keys():
+                if isinstance(x, float) or isinstance(x, int):
+                    meandict[key] += x * w
                 else:
                     meandict[key] = x
             else:
-                if(isinstance(x, float) or isinstance(x, int)):
-                    meandict[key] = x*w
+                if isinstance(x, float) or isinstance(x, int):
+                    meandict[key] = x * w
                 else:
                     meandict[key] = x
             return meandict
-    
+
     def get_mean_params(self):
         beta = float(self.model_parameters['beta'])
         if self.weights is None:
-            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+            weights = HeterogeneousEnsemble._get_weights(beta, self.losses)
         else:
             weights = copy.deepcopy(self.weights)
         s = 0
         for idx in self.losses.keys():
-            s+=weights[idx]
+            s += weights[idx]
         for idx in weights.keys():
-            weights[idx] = weights[idx]/s
-            
+            weights[idx] = weights[idx] / s
+
         constituent_dict = self.model_parameters['constituent_models']
         mean_params = dict()
         for idx in constituent_dict.keys():
@@ -71,7 +112,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             for key in constituent_model:
                 mean_params.update(self.update_nested_dict(mean_params, constituent_model[key], key, weights[idx]))
         return mean_params
-    
+
     def get_params_uncertainty(self):
         uncertainty_params = self.model_parameters['uncertainty_parameters']
         param_of_interest = uncertainty_params['param_key_of_interest']
@@ -84,7 +125,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
 
         beta = float(self.model_parameters['beta'])
         if self.weights is None:
-            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+            weights = HeterogeneousEnsemble._get_weights(beta, self.losses)
         else:
             weights = copy.deepcopy(self.weights)
 
@@ -119,48 +160,6 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             percentiles_params['mean']['model_parameters'] = mean_params
 
         return percentiles_params
-
-    def _flatten_dict(self, old_dict, append_str=""):
-        new_dict = dict()
-        for key in old_dict.keys():
-            if type(old_dict[key]) == dict:
-                new_dict.update(self._flatten_dict(old_dict[key], append_str + key + "_"))
-            else:
-                if isinstance(old_dict[key], float) or isinstance(old_dict[key], int):
-                    new_dict[append_str + key] = old_dict[key]
-        return new_dict
-
-    def _get_statistics_given_indexes(self, list_of_indexes, append_str):
-        if len(list_of_indexes) <= 0:
-            return pd.DataFrame()
-        list_of_params = dict()
-        for idx in list_of_indexes:
-            list_of_params[idx] = (self._flatten_dict(self.models[idx].model_parameters))
-
-        keys = list(list_of_params[list_of_indexes[0]].keys())
-
-        beta = float(self.model_parameters['beta'])
-        if self.weights is None:
-            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
-        else:
-            weights = copy.deepcopy(self.weights)
-        s = 0
-        for idx in list_of_indexes:
-            s += weights[idx]
-        for idx in weights.keys():
-            weights[idx] = weights[idx] / s
-        mean = dict()
-        mini = dict()
-        maxi = dict()
-        mean['statName'] = append_str + "Mean"
-        mini['statName'] = append_str + "Min"
-        maxi['statName'] = append_str + "Max"
-        for key in keys:
-            mean[key] = np.sum([list_of_params[idx][key] * weights[idx] for idx in list_of_indexes])
-            mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
-            maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
-
-        return [mean, mini, maxi]
 
     def get_statistics_of_params(self, output_file_location=None):
         sorted_loss_indexes = [item[0] for item in sorted(self.losses.items(), key=lambda kv: (kv[1], kv[0]))]
@@ -216,7 +215,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             df_predictions = predictions_df_dict[percentile_params[key]['model_index']]
             percentiles_forecast[key]['df_prediction'] = df_predictions
 
-        percentiles_forecast = uncertainty_dict_to_df(percentiles_forecast)
+        percentiles_forecast = HeterogeneousEnsemble._uncertainty_dict_to_df(percentiles_forecast)
         if self.model_parameters['uncertainty_parameters']['include_mean']:
             mean_predictions_df = self.predict_from_mean_param(region_metadata, region_observations, run_day,
                                                                start_date, end_date)

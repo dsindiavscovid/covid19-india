@@ -58,7 +58,7 @@
     "region_name": [],
     "region_type": "district",
     "data_source": "tracker_data_all",
-    "input_data_file": "input_case_count.csv",
+    "input_file_path": "input_case_count.csv",
     "output_dir": "outputs/",
     "interval_to_consider": 7,
     "time_interval_config": {
@@ -226,7 +226,7 @@
     "publish_flag": "True",
     "comments": "",
     "input_artifacts": [
-      "input_data_file",
+      "input_file_path",
       "staffing_ratios_file"
     ]
   }

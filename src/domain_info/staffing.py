@@ -1,8 +1,8 @@
 from modules.data_fetcher_module import DataFetcherModule
 
 
-# Fixes the input staff ratio matrix and also the column names, index
 def get_clean_staffing_ratio(staff_ratios_file_path: str):
+    """Fixes the input staff ratio matrix and also the column names, index"""
     staff_ratios = DataFetcherModule.get_staffing_ratios(staff_ratios_file_path)
     for b in staff_ratios.columns:
         bnew = b.split('\n')[0].strip()
@@ -12,10 +12,10 @@ def get_clean_staffing_ratio(staff_ratios_file_path: str):
     return staff_ratios.copy()
 
 
-# Computes the staffing matrix for a given active_count and other params
 def compute_staffing_matrix(active_count: int, bed_type_ratio: int,
                             staff_ratios_file_path: str,
                             bed_multiplier_factor: int):
+    """Computes the staffing matrix for a given active_count and other params"""
     # fix the staff ratios
     staff_df = get_clean_staffing_ratio(staff_ratios_file_path)
 

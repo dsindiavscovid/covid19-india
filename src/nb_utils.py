@@ -14,7 +14,7 @@ from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
-from utils.data_transformer_helper import loss_json_to_dataframe, get_observations_subset, \
+from utils.data_util import loss_json_to_dataframe, get_observations_subset, \
     add_init_observations_to_predictions
 from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots
 

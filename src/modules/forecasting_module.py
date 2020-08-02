@@ -5,8 +5,9 @@ from configs.base_config import ForecastingModuleConfig
 from entities.model_class import ModelClass
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
-from utils.config_util import read_config_file
-from utils.data_transformer_helper import convert_to_old_required_format, convert_to_required_format
+from utils.data_util import convert_to_old_required_format, convert_to_required_format, \
+    add_init_observations_to_predictions, get_date
+from utils.io import read_config_file
 
 
 class ForecastingModule(object):
@@ -55,3 +56,44 @@ class ForecastingModule(object):
         if config.output_dir is not None and config.output_file_prefix is not None:
             predictions.to_csv(os.path.join(config.output_dir, f'{config.output_file_prefix}.csv'), index=False)
         return predictions
+
+    @staticmethod
+    def flexible_forecast(actual, model_params, forecast_run_day, forecast_start_date, forecast_end_date,
+                          forecast_trim_day, forecast_config, with_uncertainty=False, include_best_fit=False):
+
+        # forecast_config = ForecastingModuleConfig.parse_obj(forecast_config)
+
+        # set the dates and the model parameters
+        forecast_config.model_parameters = model_params
+        forecast_config.forecast_run_day = forecast_run_day
+        forecast_config.forecast_start_date = forecast_start_date
+        forecast_config.forecast_end_date = forecast_end_date
+
+        # change the predict mode
+        if with_uncertainty:
+            forecast_config.model_parameters['modes']['predict_mode'] = 'predictions_with_uncertainty'
+
+        forecast_df = ForecastingModule.from_config(forecast_config)
+        forecast_df_best_fit = pd.DataFrame()
+        if include_best_fit:
+            forecast_config.model_parameters['modes']['predict_mode'] = 'best_fit'
+            forecast_df_best_fit = ForecastingModule.from_config(forecast_config)
+            forecast_df_best_fit = forecast_df_best_fit.drop(
+                columns=['Region Type', 'Region', 'Country', 'Lat', 'Long'])
+            for col in forecast_df_best_fit.columns:
+                if col.endswith('_mean'):
+                    new_col = '_'.join([col.split('_')[0], 'best'])
+                    forecast_df_best_fit = forecast_df_best_fit.rename(columns={col: new_col})
+                else:
+                    forecast_df_best_fit = forecast_df_best_fit.rename(columns={col: '_'.join([col, 'best'])})
+
+        forecast_df = forecast_df.drop(columns=['Region Type', 'Region', 'Country', 'Lat', 'Long'])
+        forecast_df = pd.concat([forecast_df_best_fit, forecast_df], axis=1)
+        forecast_df = forecast_df.reset_index()
+
+        # add run day observation and trim
+        forecast_df = add_init_observations_to_predictions(actual, forecast_df,
+                                                           forecast_run_day)
+        forecast_df['date'] = pd.to_datetime(forecast_df['date'])
+        forecast_df = forecast_df[forecast_df['date'] < get_date(forecast_trim_day, 1)]
+        return forecast_df

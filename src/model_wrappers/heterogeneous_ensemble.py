@@ -2,6 +2,7 @@ from copy import deepcopy
 from datetime import timedelta, datetime
 from functools import reduce, partial
 
+import numpy as np
 import pandas as pd
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
@@ -9,9 +10,8 @@ from hyperopt import hp
 from model_wrappers import model_factory as model_factory_alias
 from model_wrappers.base import ModelWrapperBase
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
-from utils.ensemble_util import get_weighted_predictions, create_trials_dataframe, uncertainty_dict_to_df, get_weights
 from utils.hyperparam_util import hyperparam_tuning
-from utils.loss_util import evaluate_for_forecast
+from utils.metrics_util import evaluate_for_forecast
 
 
 class HeterogeneousEnsemble(ModelWrapperBase):
@@ -30,12 +30,62 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         self._initialize_constituent_models()
 
     def _initialize_constituent_models(self):
+        """Helper function to initialize constituent models"""
+
         for idx in self.models:
             constituent_model = self.models[idx]
             constituent_model_class = constituent_model['model_class']
             constituent_model_parameters = constituent_model['model_parameters']
             self.models[idx] = model_factory_alias.ModelFactory.get_model(
                 constituent_model_class, constituent_model_parameters)
+
+    def _get_index_for_percentile_helper(self, variable_of_interest, date_of_interest, tolerance, percentiles,
+                                         region_metadata, region_observations, run_day, start_date, end_date):
+        """Helper function to get model indexes for percentiles
+
+        Args:
+            variable_of_interest (str):
+            date_of_interest (str):
+            tolerance (float):
+            percentiles (list):
+            region_metadata (dict):
+            region_observations (pd.DataFrame):
+            run_day (str):
+            start_date (str):
+            end_date (str):
+
+        Returns:
+            tuple
+        """
+
+        # Get predictions, mean predictions and weighted predictions
+        predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
+                                                        run_day, start_date, end_date)
+
+        # Get predictions for a specific column on date of interest
+        trials_df = HeterogeneousEnsemble._create_trials_dataframe(predictions_df_dict, variable_of_interest)
+        try:
+            predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
+        except KeyError:
+            raise Exception("The planning date is not in the range of predicted dates")
+        beta = self.model_parameters['beta']
+        if self.weights is None:
+            weights = HeterogeneousEnsemble._get_weights(beta, self.losses)
+        else:
+            weights = deepcopy(self.weights)
+        df = pd.DataFrame.from_dict(weights, orient='index', columns=['weight'])
+        df = df.join(predictions_doi.set_index(df.index))
+
+        # Find PDF, CDF
+        df['pdf'] = weights_to_pdf(df['weight'])
+        df = df.sort_values(by=date_of_interest).reset_index()
+        df['cdf'] = pdf_to_cdf(df['pdf'])
+
+        # Get indices for percentiles and confidence intervals
+        percentiles_dict = dict()
+        for p in percentiles:
+            percentiles_dict[p] = get_best_index(df, p, tolerance)
+        return percentiles_dict, predictions_df_dict
 
     def supported_forecast_variables(self):
         return [ForecastVariable.confirmed, ForecastVariable.recovered, ForecastVariable.active]
@@ -158,12 +208,12 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
         # Calculate weights for constituent models as exp(-beta*loss)
         if self.weights is None or is_tuning:
-            weights = get_weights(beta, self.losses)
+            weights = HeterogeneousEnsemble._get_weights(beta, self.losses)
         else:
             weights = deepcopy(self.weights)
 
         # Get weighted predictions of constituent models
-        predictions_df_dict = get_weighted_predictions(predictions_df_dict, weights)
+        predictions_df_dict = HeterogeneousEnsemble._get_weighted_predictions(predictions_df_dict, weights)
 
         # Compute mean predictions
         mean_predictions_df = reduce(lambda left, right: left.add(right), predictions_df_dict.values())
@@ -172,39 +222,6 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         mean_predictions_df.reset_index(inplace=True)
 
         return mean_predictions_df
-
-    # Helper function to get the model indexes
-    def _get_index_for_percentile_helper(self, variable_of_interest, date_of_interest, tolerance, percentiles,
-                                         region_metadata, region_observations, run_day, start_date, end_date):
-
-        # Get predictions, mean predictions and weighted predictions
-        predictions_df_dict = self.get_predictions_dict(region_metadata, region_observations,
-                                                        run_day, start_date, end_date)
-
-        # Get predictions for a specific column on date of interest
-        trials_df = create_trials_dataframe(predictions_df_dict, variable_of_interest)
-        try:
-            predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
-        except KeyError:
-            raise Exception("The planning date is not in the range of predicted dates")
-        beta = self.model_parameters['beta']
-        if self.weights is None:
-            weights = get_weights(beta, self.losses)
-        else:
-            weights = deepcopy(self.weights)
-        df = pd.DataFrame.from_dict(weights, orient='index', columns=['weight'])
-        df = df.join(predictions_doi.set_index(df.index))
-
-        # Find PDF, CDF
-        df['pdf'] = weights_to_pdf(df['weight'])
-        df = df.sort_values(by=date_of_interest).reset_index()
-        df['cdf'] = pdf_to_cdf(df['pdf'])
-
-        # Get indices for percentiles and confidence intervals
-        percentiles_dict = dict()
-        for p in percentiles:
-            percentiles_dict[p] = get_best_index(df, p, tolerance)
-        return percentiles_dict, predictions_df_dict
 
     def predict_with_uncertainty(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
                                  start_date: str, end_date: str, **kwargs):
@@ -247,7 +264,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
             percentiles_predictions[key]['df_prediction'] = df_predictions
 
         # Create percentiles dataframe
-        percentiles_predictions = uncertainty_dict_to_df(percentiles_predictions)
+        percentiles_predictions = HeterogeneousEnsemble._uncertainty_dict_to_df(percentiles_predictions)
 
         # Include mean predictions in dataframe if include_mean is True
         if include_mean:
@@ -260,6 +277,22 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
     def get_params_for_percentiles(self, variable_of_interest, date_of_interest, tolerance, percentiles,
                                    region_metadata, region_observations, run_day, start_date, end_date):
+        """Gets parameters for specific percentiles
+
+        Args:
+            variable_of_interest (str):
+            date_of_interest (str):
+            tolerance (float):
+            percentiles (list):
+            region_metadata (dict):
+            region_observations (pd.DataFrame):
+            run_day (str):
+            start_date (str):
+            end_date (str):
+
+        Returns:
+            dict
+        """
 
         percentiles_dict, _ = self._get_index_for_percentile_helper(variable_of_interest, date_of_interest, tolerance,
                                                                     percentiles, region_metadata, region_observations,
@@ -272,7 +305,7 @@ class HeterogeneousEnsemble(ModelWrapperBase):
 
     def get_trials_distribution(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
                                 start_date: str, end_date: str):
-        """Get trials and distribution for a given column and date
+        """Get trials and distribution for a given variable and date
 
         Args:
             region_metadata (dict): region metadata
@@ -294,14 +327,14 @@ class HeterogeneousEnsemble(ModelWrapperBase):
                                                         run_day, start_date, end_date)
 
         # Get predictions for a specific column on date of interest
-        trials_df = create_trials_dataframe(predictions_df_dict, variable_of_interest)
+        trials_df = HeterogeneousEnsemble._create_trials_dataframe(predictions_df_dict, variable_of_interest)
         try:
             predictions_doi = trials_df.loc[:, [date_of_interest]].reset_index(drop=True)
         except KeyError:
             raise Exception("The planning date is not in the range of predicted dates")
         beta = self.model_parameters['beta']
         if self.weights is None:
-            weights = get_weights(beta, self.losses)
+            weights = HeterogeneousEnsemble._get_weights(beta, self.losses)
         else:
             weights = deepcopy(self.weights)
         df = pd.DataFrame.from_dict(weights, orient='index', columns=['weight'])
@@ -314,3 +347,75 @@ class HeterogeneousEnsemble(ModelWrapperBase):
         df['cdf'] = pdf_to_cdf(df['pdf'])
 
         return df
+
+    @staticmethod
+    def _uncertainty_dict_to_df(percentiles_predictions):
+        """Convert a dictionary of uncertainty predictions to a dataframe
+
+        Args:
+            percentiles_predictions (dict): dictionary of the form {percentile: predictions dataframe}
+
+        Returns:
+            pd.DataFrame: dataframe with predictions for percentiles and confidence intervals
+        """
+
+        columns = ['predictionDate']
+        for decile in percentiles_predictions.keys():
+            df_prediction = percentiles_predictions[decile]['df_prediction']
+            cols = list(df_prediction.columns)
+            for col in cols:
+                columns.append(col + '_{}'.format(decile))
+
+        df_output = pd.DataFrame(columns=columns)
+
+        date_series = percentiles_predictions[list(percentiles_predictions.keys())[0]]['df_prediction'].index
+        df_output['predictionDate'] = date_series
+        df_output.set_index('predictionDate', inplace=True)
+
+        for decile in percentiles_predictions.keys():
+            df_prediction = percentiles_predictions[decile]['df_prediction']
+            cols = list(df_prediction.columns)
+            for col in cols:
+                df_output.loc[:, col + '_{}'.format(decile)] = df_prediction[col]
+
+        df_output.reset_index(inplace=True)
+
+        return df_output
+
+    @staticmethod
+    def _create_trials_dataframe(predictions_df_dict, column=ForecastVariable.active):
+        """Create dataframe of predictions for a single forecast variable from all constituent models
+
+        Args:
+            predictions_df_dict (dict): dictionary of the form {index: predictions} for constituent models
+            column (ForecastVariable): predictions for this forecast variable are extracted
+                from constituent model predictions
+
+        Returns:
+            pd.DataFrame: dataframe of predictions of forecast variable from all constituent models
+        """
+
+        trials_df_list = []
+        for idx in predictions_df_dict:
+            trials_df_list.append(predictions_df_dict[idx].loc[:, [column]].T)
+        return pd.concat(trials_df_list, axis=0, ignore_index=True)
+
+    @staticmethod
+    def _get_weighted_predictions(predictions_df_dict, weights):
+        """Gets weighted predictions for all constituent models
+
+        Args:
+            predictions_df_dict (dict): dictionary of the form {index: predictions} for constituent models
+            weights (dict): dictionary of the form {index: weight} for constituent models
+
+        Returns:
+            dict: dictionary of the form {index: weighted predictions} for constituent models
+        """
+
+        for idx in predictions_df_dict:
+            predictions_df_dict[idx] = predictions_df_dict[idx].multiply(weights[idx])
+        return predictions_df_dict
+
+    @staticmethod
+    def _get_weights(beta, losses):
+        return {idx: np.exp(-beta * loss) for idx, loss in losses.items()}

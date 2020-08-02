@@ -9,16 +9,16 @@ from hyperopt import hp
 from model_wrappers.base import ModelWrapperBase
 from seirsplus.models import *
 from utils.hyperparam_util import hyperparam_tuning
-from utils.loss_util import evaluate_for_forecast
+from utils.metrics_util import evaluate_for_forecast
 
 
 class SEIHRD(ModelWrapperBase):
 
-    def fit(self):
-        pass
-
     def __init__(self, model_parameters: dict):
         self.model_parameters = model_parameters
+
+    def fit(self):
+        pass
 
     def supported_forecast_variables(self):
         return [ForecastVariable.confirmed, ForecastVariable.recovered, ForecastVariable.active]

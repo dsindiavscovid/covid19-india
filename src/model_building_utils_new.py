@@ -1,29 +1,25 @@
-import json
 import os
 from copy import deepcopy
 from datetime import datetime
 
+import domain_info.staffing as domain_info
 import mlflow
 import pandas as pd
 import publishers.mlflow_logging as mlflow_logger
 import publishers.report_generation as reporting
-import utils.staffing as domain_info
 from configs.base_config import TrainingModuleConfig, ModelEvaluatorConfig, ForecastingModuleConfig
 from configs.model_building_session_config import ModelBuildingSessionOutputArtifacts, ModelBuildingSessionParams, \
     ModelBuildingSessionMetrics
-from general_utils import create_output_folder, render_artifact, set_dict_field, \
-    get_dict_field, compute_dates
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
 from modules.model_evaluator import ModelEvaluator
 from modules.training_module import TrainingModule
 from pydantic import BaseModel
-from utils.data_transformer_helper import flatten, add_init_observations_to_predictions, get_observations_subset, \
-    pydantic_to_dict
+from utils.data_util import get_observations_subset, pydantic_to_dict, get_date
+from utils.general_utils import create_output_folder, render_artifact, set_dict_field, get_dict_field
 from utils.io import read_file, write_file
-from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots, plot_data
-from utils.time import get_date
+from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots, multivariate_case_count_plot
 
 
 # TODO:
@@ -58,8 +54,7 @@ class ModelBuildingSession(BaseModel):
     def __init__(self, session_name, user_name='guest'):
 
         # load up the default configuration
-        with open(ModelBuildingSession._DEFAULT_SESSION_CONFIG, 'r') as infile:
-            super().__init__(**json.load(infile))
+        super().__init__(**read_file(ModelBuildingSession._DEFAULT_SESSION_CONFIG, "json", "dict"))
 
         # set up session_name
         self._set_session_name(session_name, user_name)
@@ -69,22 +64,6 @@ class ModelBuildingSession(BaseModel):
 
         # create output folder
         create_output_folder(self.params.session_name + '_outputs', ModelBuildingSession._DEFAULT_ROOT_DIR)
-
-    @staticmethod
-    def create_session(session_name, user_name='guest'):
-        # NOTE:
-        # if we were going to need to inherit from this ModelBuildingSession class, we should make this as classmethod
-        current_session = ModelBuildingSession(session_name, user_name)
-
-        msg = (
-            f'**********************\n'
-            f'Created session: {current_session.params.session_name}\n'
-            f'User: {current_session.params.user_name}\n'
-            f'Output stored in the directory: {current_session.params.output_dir}\n'
-            f'**********************\n'
-        )
-        print(msg)
-        return current_session
 
     def _set_session_name(self, session_name, user_name):
         # create a session name if not given
@@ -99,20 +78,6 @@ class ModelBuildingSession(BaseModel):
         for key, value in self.output_artifacts.__fields__.items():
             self.output_artifacts.__setattr__(key, os.path.join(self.params.output_dir,
                                                                 self.output_artifacts.__getattribute__(key)))
-
-    @staticmethod
-    def _init_mlflow_datapipeline_config():
-
-        # MLflow configuration
-        mlflow_config = read_file(ModelBuildingSession._ML_FLOW_CONFIG, "json", "dict")
-        mlflow.set_tracking_uri(mlflow_config['tracking_url'])
-        # TODO: Tracking URL as session param?
-        os.environ['MLFLOW_TRACKING_USERNAME'] = mlflow_config['username']
-        os.environ['MLFLOW_TRACKING_PASSWORD'] = mlflow_config['password']
-
-        # Official pipeline configuration
-        os.system('source ' + ModelBuildingSession._OFFICIAL_DATA_PIPELINE_CONFIG)
-        return
 
     def _validate_params_for_function(self, func_str):
         """
@@ -193,34 +158,133 @@ class ModelBuildingSession(BaseModel):
                                                              sp.interval_to_consider)
         return outputs['links_df']
 
-    @staticmethod
-    def view_forecasts_static(experiment_name, region_name, interval_to_consider):
-        outputs = {}
-        outputs['links_df'] = mlflow_logger.get_previous_runs(experiment_name, region_name, interval_to_consider)
-        return outputs
-
     def examine_data(self):
         self._validate_params_for_function('examine_data')
         sp = self.params
         outputs = ModelBuildingSession.examine_data_static(sp.region_name, sp.region_type, sp.data_source,
-                                                           sp.input_data_file, self.output_artifacts)
+                                                           sp.input_file_path, self.output_artifacts)
+        return
+
+    def build_models_and_generate_forecast(self):
+        self._validate_params_for_function('build_models_and_generate_forecast')
+        sp = self.params
+        sp.time_interval_config = ModelBuildingSession._compute_dates(sp.time_interval_config)
+        outputs = ModelBuildingSession.build_models_and_generate_forecast_static(True, sp.region_name, sp.region_type,
+                                                                                 sp.data_source, sp.input_file_path,
+                                                                                 sp.time_interval_config,
+                                                                                 sp.model_class, sp.model_parameters,
+                                                                                 sp.train_loss_function,
+                                                                                 sp.search_space, sp.search_parameters,
+                                                                                 sp.eval_loss_functions,
+                                                                                 sp.uncertainty_parameters,
+                                                                                 self.output_artifacts, sp.output_dir)
+        self.metrics.__fields__.update(outputs['metrics'])
+
+        # creating report outside of the static_method to keep it simple
+        reporting.create_report(self.params, self.metrics, self.output_artifacts,
+                                template_path=ModelBuildingSession._DEFAULT_MODEL_BUILDING_REPORT_TEMPLATE,
+                                report_path=self.output_artifacts.model_building_report)
+
+        return outputs['metrics']
+
+    def generate_planning_outputs(self):
+        self._validate_params_for_function('generate_planning_outputs')
+        sp = self.params
+
+        # NOTE: we kept the model_params transfer explicit and separate from that of output_artifacts in case we
+        # we change how we log and transfer objects during the session
+        outputs = ModelBuildingSession.generate_planning_outputs_static(sp.region_name, sp.region_type, sp.data_source,
+                                                                        sp.input_file_path, sp.time_interval_config,
+                                                                        sp.model_class,
+                                                                        sp.uncertainty_parameters, sp.planning,
+                                                                        sp.staffing,
+                                                                        self.output_artifacts.M2_model_params,
+                                                                        self.output_artifacts, sp.output_dir)
+        self.metrics.__fields__.update(outputs['metrics'])
+
+        # creating report outside of the static_method to keep it simple
+        reporting.create_report(self.params, self.metrics, self.output_artifacts,
+                                template_path=ModelBuildingSession._DEFAULT_PLANNING_REPORT_TEMPLATE,
+                                report_path=self.output_artifacts.planning_report)
+
+        return outputs['metrics']
+
+    def list_outputs(self):
+        self._validate_params_for_function('list_outputs')
+        outputs = ModelBuildingSession.list_outputs_static(self.output_artifacts)
+        return
+
+    def log_session(self):
+        self._validate_params_for_function('log_session')
+        # Todo: Is this necessary? Can we flatten a pydantic object before logging?
+        outputs = ModelBuildingSession.log_session_static(self.params, self.metrics, self.output_artifacts,
+                                                          self.params.experiment_name, self.params.session_name)
         return
 
     @staticmethod
-    def examine_data_static(region_name, region_type, data_source, input_data_file, output_artifacts):
-        outputs = {}
-        actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
-                                                               filepath=input_data_file, smooth=False, simple=True)
+    def _init_mlflow_datapipeline_config():
 
-        write_file(actual, output_artifacts.cleaned_case_count_file, "csv", "dataframe")
-        plot_data(region_name, actual, plot_path=output_artifacts.plot_case_count)
-        return outputs
+        # MLflow configuration
+        mlflow_config = read_file(ModelBuildingSession._ML_FLOW_CONFIG, "json", "dict")
+        mlflow.set_tracking_uri(mlflow_config['tracking_url'])
+        # TODO: Tracking URL as session param?
+        os.environ['MLFLOW_TRACKING_USERNAME'] = mlflow_config['username']
+        os.environ['MLFLOW_TRACKING_PASSWORD'] = mlflow_config['password']
+
+        # Official pipeline configuration
+        os.system('source ' + ModelBuildingSession._OFFICIAL_DATA_PIPELINE_CONFIG)
+        return
 
     @staticmethod
-    def generate_model_operations_config(region_name, region_type, data_source, input_filepath, time_interval_config,
-                                         model_class, model_parameters, train_loss_function, search_space,
-                                         search_parameters, eval_loss_functions, uncertainty_parameters, model_file,
-                                         operation, output_dir):
+    def _compute_dates(time_interval_config):
+        """
+              Compute all the dates in time_interval_config in a consistent way
+        """
+
+        # Note: expectation is that either the user specifies ALL the dates in "direct" mode
+        # or we would populate it based on the offsets and reference day
+        is_direct_mode = True
+        for k in time_interval_config["direct"]:
+            if not time_interval_config["direct"][k]:
+                is_direct_mode = False
+                break
+
+        # if not direct/expert mode, reference_day is set to today if not specified by user
+        # and other dates in the direct mode are computed accordingly
+        if not is_direct_mode:
+
+            if not time_interval_config["offset_based"]["reference_day"]:
+                d0 = datetime.today().strftime("%-m/%-d/%y")
+                time_interval_config["offset_based"]["reference_day"] = d0
+            else:  # Added
+                d0 = time_interval_config["offset_based"]["reference_day"]
+            # compute the direct_mode dates based on this
+            d = {}
+            offsets = time_interval_config["offset_based"]
+            d["forecast_end_date"] = get_date(d0, offsets["forecast_period"])
+            d["forecast_run_day"] = get_date(d0, 0)
+            d["forecast_start_date"] = get_date(d0, 1)
+            d["test_end_date"] = get_date(d0, 0)
+            d["test_run_day"] = get_date(d0, -offsets["test_period"] - 1)
+            d["test_start_date"] = get_date(d0, -offsets["test_period"])
+            d["train1_end_date"] = get_date(d0, -offsets["test_period"] - 1)
+            d["train1_run_day"] = get_date(d0, -offsets["test_period"] - offsets["train_period"] - 2)
+            d["train1_start_date"] = get_date(d0, -offsets["test_period"] - offsets["train_period"] - 1)
+            d["train2_end_date"] = get_date(d0, 0)
+            d["train2_run_day"] = get_date(d0, -offsets["train_period"] - 1)
+            d["train2_start_date"] = get_date(d0, -offsets["train_period"])
+            d["plot_start_date_m1"] = get_date(d0, -offsets["test_period"] - offsets["train_period"] - offsets[
+                "plot_buffer"] - 1)
+            d["plot_start_date_m2"] = get_date(d0, -offsets["train_period"] - offsets["plot_buffer"])
+            time_interval_config["direct"] = d
+
+        return time_interval_config
+
+    @staticmethod
+    def _generate_model_operations_config(region_name, region_type, data_source, input_filepath, time_interval_config,
+                                          model_class, model_parameters, train_loss_function, search_space,
+                                          search_parameters, eval_loss_functions, uncertainty_parameters, model_file,
+                                          operation, output_dir):
 
         cfg = dict()
 
@@ -232,7 +296,6 @@ class ModelBuildingSession(BaseModel):
         cfg['region_type'] = region_type
         cfg['model_class'] = model_class
         cfg['input_filepath'] = input_filepath
-        # TODO: do we need this to be set really ?
         cfg['output_file_prefix'] = operation
         cfg['output_dir'] = output_dir
 
@@ -294,31 +357,38 @@ class ModelBuildingSession(BaseModel):
 
         return cfg
 
-    def build_models_and_generate_forecast(self):
-        self._validate_params_for_function('build_models_and_generate_forecast')
-        sp = self.params
-        outputs = ModelBuildingSession.build_models_and_generate_forecast_static(True, sp.region_name, sp.region_type,
-                                                                                 sp.data_source, sp.input_data_file,
-                                                                                 sp.time_interval_config,
-                                                                                 sp.model_class, sp.model_parameters,
-                                                                                 sp.train_loss_function,
-                                                                                 sp.search_space, sp.search_parameters,
-                                                                                 sp.eval_loss_functions,
-                                                                                 sp.uncertainty_parameters,
-                                                                                 self.output_artifacts, sp.output_dir)
-        self.metrics.__fields__.update(outputs['metrics'])
+    @staticmethod
+    def create_session(session_name, user_name='guest'):
+        # NOTE:
+        # if we were going to need to inherit from this ModelBuildingSession class, we should make this as classmethod
+        current_session = ModelBuildingSession(session_name, user_name)
 
-        # TODO: Is there a better method of doing this?
-        report_params = pydantic_to_dict(self.params)
-        report_metrics = pydantic_to_dict(self.metrics)
-        report_output_artifacts = pydantic_to_dict(self.output_artifacts)
+        msg = (
+            f'**********************\n'
+            f'Created session: {current_session.params.session_name}\n'
+            f'User: {current_session.params.user_name}\n'
+            f'Output stored in the directory: {current_session.params.output_dir}\n'
+            f'**********************\n'
+        )
+        print(msg)
+        return current_session
 
-        # creating report outside of the static_method to keep it simple
-        reporting.create_report(report_params, report_metrics, report_output_artifacts,
-                                template_path=ModelBuildingSession._DEFAULT_MODEL_BUILDING_REPORT_TEMPLATE,
-                                report_path=self.output_artifacts.model_building_report)
+    @staticmethod
+    def view_forecasts_static(experiment_name, region_name, interval_to_consider):
+        outputs = {}
+        outputs['links_df'] = mlflow_logger.get_previous_runs(experiment_name, region_name, interval_to_consider)
+        return outputs
 
-        return outputs['metrics']
+    @staticmethod
+    def examine_data_static(region_name, region_type, data_source, input_file_path, output_artifacts):
+        outputs = {}
+        actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
+                                                               filepath=input_file_path, smooth=False, simple=True)
+
+        write_file(actual, output_artifacts.cleaned_case_count_file, "csv", "dataframe")
+        multivariate_case_count_plot(actual, column_label='', column_tag='', title=region_name,
+                                     path=output_artifacts.plot_case_count)
+        return outputs
 
     @staticmethod
     def build_models_and_generate_forecast_static(verbose, region_name, region_type, data_source, input_filepath,
@@ -327,7 +397,6 @@ class ModelBuildingSession(BaseModel):
                                                   eval_loss_functions, uncertainty_parameters, output_artifacts,
                                                   output_dir):
         outputs = {}
-        time_interval_config = compute_dates(time_interval_config)  # TODO: where should this go?
         metrics = ModelBuildingSession.train_eval_static(region_name, region_type, data_source, input_filepath,
                                                          time_interval_config, model_class, model_parameters,
                                                          train_loss_function, search_space, search_parameters,
@@ -342,22 +411,22 @@ class ModelBuildingSession(BaseModel):
         return outputs
 
     @staticmethod
-    # TODO: compare if it is equivalent of the old train_eval_ensemble
     def train_eval_static(region_name, region_type, data_source, input_filepath, time_interval_config, model_class,
                           model_parameters, train_loss_function, search_space, search_parameters, eval_loss_functions,
                           uncertainty_parameters, output_artifacts, output_dir):
+        # TODO: compare if it is equivalent of the old train_eval_ensemble
         metrics = {}
 
         # 1.  M1 train step
 
         # generate the config
-        M1_train_config = ModelBuildingSession.generate_model_operations_config(region_name, region_type, data_source,
-                                                                                input_filepath, time_interval_config,
-                                                                                model_class, model_parameters,
-                                                                                train_loss_function, search_space,
-                                                                                search_parameters, eval_loss_functions,
-                                                                                uncertainty_parameters,
-                                                                                None, "M1_train", output_dir)
+        M1_train_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
+                                                                                 input_filepath, time_interval_config,
+                                                                                 model_class, model_parameters,
+                                                                                 train_loss_function, search_space,
+                                                                                 search_parameters, eval_loss_functions,
+                                                                                 uncertainty_parameters,
+                                                                                 None, "M1_train", output_dir)
         # run the training
         M1_train_results = TrainingModule.from_config(deepcopy(M1_train_config))
         # collect all the outputs
@@ -375,14 +444,14 @@ class ModelBuildingSession(BaseModel):
         # 2.  M1 test step
 
         # generate the config
-        M1_test_config = ModelBuildingSession.generate_model_operations_config(region_name, region_type, data_source,
-                                                                               input_filepath, time_interval_config,
-                                                                               model_class, model_parameters,
-                                                                               train_loss_function, search_space,
-                                                                               search_parameters, eval_loss_functions,
-                                                                               uncertainty_parameters,
-                                                                               output_artifacts.M1_model_params,
-                                                                               "M1_test", output_dir)
+        M1_test_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
+                                                                                input_filepath, time_interval_config,
+                                                                                model_class, model_parameters,
+                                                                                train_loss_function, search_space,
+                                                                                search_parameters, eval_loss_functions,
+                                                                                uncertainty_parameters,
+                                                                                output_artifacts.M1_model_params,
+                                                                                "M1_test", output_dir)
         # run the evaluation
         M1_test_results = ModelEvaluator.from_config(deepcopy(M1_test_config))
 
@@ -394,13 +463,13 @@ class ModelBuildingSession(BaseModel):
         # 3. M2 train step
 
         # generate the config
-        M2_train_config = ModelBuildingSession.generate_model_operations_config(region_name, region_type, data_source,
-                                                                                input_filepath, time_interval_config,
-                                                                                model_class, model_parameters,
-                                                                                train_loss_function, search_space,
-                                                                                search_parameters, eval_loss_functions,
-                                                                                uncertainty_parameters,
-                                                                                None, "M2_train", output_dir)
+        M2_train_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
+                                                                                 input_filepath, time_interval_config,
+                                                                                 model_class, model_parameters,
+                                                                                 train_loss_function, search_space,
+                                                                                 search_parameters, eval_loss_functions,
+                                                                                 uncertainty_parameters,
+                                                                                 None, "M2_train", output_dir)
         # run the training
         M2_train_results = TrainingModule.from_config(deepcopy(M2_train_config))
 
@@ -418,10 +487,9 @@ class ModelBuildingSession(BaseModel):
         # TODO: CONVERT
         # metrics['M2_losses'] = loss_json_to_dataframe(M2_train_results['train_metric_results'], 'train2')
 
-        # TODO: Make contents serializable and save
-        # write_file(M1_train_config, output_artifacts.M1_train_config, "json", "dict")
-        # write_file(M1_test_config, output_artifacts.M1_test_config, "json", "dict")
-        # write_file(M2_train_config, output_artifacts.M2_train_config, "json", "dict")
+        write_file(pydantic_to_dict(M1_train_config), output_artifacts.M1_train_config, "json", "dict")
+        write_file(pydantic_to_dict(M1_test_config), output_artifacts.M1_test_config, "json", "dict")
+        write_file(pydantic_to_dict(M2_train_config), output_artifacts.M2_train_config, "json", "dict")
 
         return metrics
 
@@ -452,12 +520,12 @@ class ModelBuildingSession(BaseModel):
 
         # Get a reusable forecast config
         # TODO: Forecasting module requires dates and model params to be set when initializing
-        forecast_config = ModelBuildingSession.generate_model_operations_config(region_name, region_type, data_source,
-                                                                                input_filepath, time_interval_config,
-                                                                                model_class, None, None, None, None,
-                                                                                None, None,
-                                                                                output_artifacts.M1_model_params,
-                                                                                "forecast", output_dir)
+        forecast_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
+                                                                                 input_filepath, time_interval_config,
+                                                                                 model_class, None, None, None, None,
+                                                                                 None, None,
+                                                                                 output_artifacts.M1_model_params,
+                                                                                 "forecast", output_dir)
 
         # Get actual and smoothed observations in correct ranges
         df_m1 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath)
@@ -465,48 +533,48 @@ class ModelBuildingSession(BaseModel):
 
         # M1 train
         if verbose:
-            df_predictions_train_m1 = ModelBuildingSession.flexible_forecast(df_m1["actual"], M1_model_params,
-                                                                             train1_run_day,
-                                                                             train1_start_date, forecast_end_date,
-                                                                             train1_end_date, forecast_config,
-                                                                             with_uncertainty=True,
-                                                                             include_best_fit=True)
+            df_predictions_train_m1 = ForecastingModule.flexible_forecast(df_m1["actual"], M1_model_params,
+                                                                          train1_run_day,
+                                                                          train1_start_date, forecast_end_date,
+                                                                          train1_end_date, forecast_config,
+                                                                          with_uncertainty=True,
+                                                                          include_best_fit=True)
         else:
-            df_predictions_train_m1 = ModelBuildingSession.flexible_forecast(df_m1["actual"], M1_model_params,
-                                                                             train1_run_day,
-                                                                             train1_start_date, train1_end_date,
-                                                                             train1_end_date, forecast_config)
+            df_predictions_train_m1 = ForecastingModule.flexible_forecast(df_m1["actual"], M1_model_params,
+                                                                          train1_run_day,
+                                                                          train1_start_date, train1_end_date,
+                                                                          train1_end_date, forecast_config)
         # M1 test
-        df_predictions_test_m1 = ModelBuildingSession.flexible_forecast(df_m1["actual"], M1_model_params, test_run_day,
-                                                                        test_start_date,
-                                                                        forecast_end_date,
-                                                                        test_end_date, forecast_config,
-                                                                        with_uncertainty=True,
-                                                                        include_best_fit=True)
+        df_predictions_test_m1 = ForecastingModule.flexible_forecast(df_m1["actual"], M1_model_params, test_run_day,
+                                                                     test_start_date,
+                                                                     forecast_end_date,
+                                                                     test_end_date, forecast_config,
+                                                                     with_uncertainty=True,
+                                                                     include_best_fit=True)
 
         # Get predictions for M2 train and forecast intervals
 
         # M2 train
         if verbose:
-            df_predictions_train_m2 = ModelBuildingSession.flexible_forecast(df_m2["actual"], M2_model_params,
-                                                                             train2_run_day,
-                                                                             train2_start_date, forecast_end_date,
-                                                                             train2_end_date, forecast_config,
-                                                                             with_uncertainty=True,
-                                                                             include_best_fit=True)
+            df_predictions_train_m2 = ForecastingModule.flexible_forecast(df_m2["actual"], M2_model_params,
+                                                                          train2_run_day,
+                                                                          train2_start_date, forecast_end_date,
+                                                                          train2_end_date, forecast_config,
+                                                                          with_uncertainty=True,
+                                                                          include_best_fit=True)
         else:
-            df_predictions_train_m2 = ModelBuildingSession.flexible_forecast(df_m2["actual"], M2_model_params,
-                                                                             train2_run_day,
-                                                                             train2_start_date, train2_end_date,
-                                                                             train2_end_date, forecast_config)
+            df_predictions_train_m2 = ForecastingModule.flexible_forecast(df_m2["actual"], M2_model_params,
+                                                                          train2_run_day,
+                                                                          train2_start_date, train2_end_date,
+                                                                          train2_end_date, forecast_config)
 
         # M2 forecast
-        df_predictions_forecast_m2 = ModelBuildingSession.flexible_forecast(df_m2["actual"], M2_model_params,
-                                                                            forecast_run_day,
-                                                                            forecast_start_date,
-                                                                            forecast_end_date, forecast_end_date,
-                                                                            forecast_config, with_uncertainty=True,
-                                                                            include_best_fit=True)
+        df_predictions_forecast_m2 = ForecastingModule.flexible_forecast(df_m2["actual"], M2_model_params,
+                                                                         forecast_run_day,
+                                                                         forecast_start_date,
+                                                                         forecast_end_date, forecast_end_date,
+                                                                         forecast_config, with_uncertainty=True,
+                                                                         include_best_fit=True)
 
         # TODO: check this writing out
         write_file(df_predictions_forecast_m2, output_artifacts.M2_full_output_forecast_file, "csv", "dataframe")
@@ -548,75 +616,7 @@ class ModelBuildingSession(BaseModel):
         distribution_plots(trials, uncertainty_parameters['variable_of_interest'], pydantic_to_dict(output_artifacts))
 
     @staticmethod
-    def flexible_forecast(actual, model_params, forecast_run_day, forecast_start_date, forecast_end_date,
-                          forecast_trim_day, forecast_config, with_uncertainty=False, include_best_fit=False):
-
-        # forecast_config = ForecastingModuleConfig.parse_obj(forecast_config)
-
-        # set the dates and the model parameters
-        forecast_config.model_parameters = model_params
-        forecast_config.forecast_run_day = forecast_run_day
-        forecast_config.forecast_start_date = forecast_start_date
-        forecast_config.forecast_end_date = forecast_end_date
-
-        # change the predict mode
-        if with_uncertainty:
-            forecast_config.model_parameters['modes']['predict_mode'] = 'predictions_with_uncertainty'
-
-        forecast_df = ForecastingModule.from_config(forecast_config)
-        forecast_df_best_fit = pd.DataFrame()
-        if include_best_fit:
-            forecast_config.model_parameters['modes']['predict_mode'] = 'best_fit'
-            forecast_df_best_fit = ForecastingModule.from_config(forecast_config)
-            forecast_df_best_fit = forecast_df_best_fit.drop(
-                columns=['Region Type', 'Region', 'Country', 'Lat', 'Long'])
-            for col in forecast_df_best_fit.columns:
-                if col.endswith('_mean'):
-                    new_col = '_'.join([col.split('_')[0], 'best'])
-                    forecast_df_best_fit = forecast_df_best_fit.rename(columns={col: new_col})
-                else:
-                    forecast_df_best_fit = forecast_df_best_fit.rename(columns={col: '_'.join([col, 'best'])})
-
-        forecast_df = forecast_df.drop(columns=['Region Type', 'Region', 'Country', 'Lat', 'Long'])
-        forecast_df = pd.concat([forecast_df_best_fit, forecast_df], axis=1)
-        forecast_df = forecast_df.reset_index()
-
-        # add run day observation and trim
-        forecast_df = add_init_observations_to_predictions(actual, forecast_df,
-                                                           forecast_run_day)
-        forecast_df['date'] = pd.to_datetime(forecast_df['date'])
-        forecast_df = forecast_df[forecast_df['date'] < get_date(forecast_trim_day, 1)]
-        return forecast_df
-
-    def generate_planning_outputs(self):
-        self._validate_params_for_function('generate_planning_outputs')
-        sp = self.params
-
-        # NOTE: we kept the model_params transfer explicit and separate from that of output_artifacts in case we
-        # we change how we log and transfer objects during the session
-        outputs = ModelBuildingSession.generate_planning_outputs_static(sp.region_name, sp.region_type, sp.data_source,
-                                                                        sp.input_data_file, sp.time_interval_config,
-                                                                        sp.model_class,
-                                                                        sp.uncertainty_parameters, sp.planning,
-                                                                        sp.staffing,
-                                                                        self.output_artifacts.M2_model_params,
-                                                                        self.output_artifacts, sp.output_dir)
-        self.metrics.__fields__.update(outputs['metrics'])
-
-        # TODO: Is there a better method of doing this?
-        report_params = pydantic_to_dict(self.params)
-        report_metrics = pydantic_to_dict(self.metrics)
-        report_output_artifacts = pydantic_to_dict(self.output_artifacts)
-
-        # creating report outside of the static_method to keep it simple
-        reporting.create_report(report_params, report_metrics, report_output_artifacts,
-                                template_path=ModelBuildingSession._DEFAULT_PLANNING_REPORT_TEMPLATE,
-                                report_path=self.output_artifacts.planning_report)
-
-        return outputs['metrics']
-
-    @staticmethod
-    def generate_planning_outputs_static(region_name, region_type, data_source, input_data_file,
+    def generate_planning_outputs_static(region_name, region_type, data_source, input_file_path,
                                          time_interval_config, model_class, uncertainty_parameters, planning,
                                          staffing, model_file, output_artifacts, output_dir):
         outputs = {}
@@ -625,11 +625,11 @@ class ModelBuildingSession(BaseModel):
         M2_model_params = read_file(model_file, "json", "dict")
         M2_model = ModelFactory.get_model(model_class, M2_model_params)
 
-        dates = compute_dates(time_interval_config)['direct']
+        dates = time_interval_config['direct']
 
         # 2. get the relevant data
         regional_data = DataFetcherModule.get_regional_data(region_type, [region_name], data_source=data_source,
-                                                            input_filepath=input_data_file)
+                                                            input_filepath=input_file_path)
 
         # 3. get the representative model for the chosen planning level
         # TODO: Is this always a single percentile?
@@ -648,10 +648,10 @@ class ModelBuildingSession(BaseModel):
 
         # 4. generate the required forecast config for the child models
         # TODO: check how we could get this without hardcoding it
-        child_model_class = "SEIHRD_gen"
+        child_model_class = M2_model.child_model_class
         # TODO: Check if this is correct
-        m2_child_forecast_config = ModelBuildingSession.generate_model_operations_config(
-            region_name, region_type, data_source, input_data_file, time_interval_config, child_model_class,
+        m2_child_forecast_config = ModelBuildingSession._generate_model_operations_config(
+            region_name, region_type, data_source, input_file_path, time_interval_config, child_model_class,
             None, None, None, None, None, None, output_artifacts.M2_planning_model_params, "forecast", output_dir)
 
         # 5. compute the parameters (just r0) for the different scenarios including the planning one
@@ -662,6 +662,7 @@ class ModelBuildingSession(BaseModel):
 
         # 6. loop through the different cases
         # TODO: LATER V3 generalize this piece for handling more complex scenarios - later V3
+        forecasting_output = pd.DataFrame()
         for i in range(len(rt_list)):
 
             #  choose the names for each case - for artifact files
@@ -673,12 +674,20 @@ class ModelBuildingSession(BaseModel):
             #  set the model params correctly
             m2_child_forecast_config.model_parameters["r0"] = rt_list[i]
 
+            #  compute the case count forecast
+            df_m2 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source,
+                                                                   input_file_path)
+
+            forecast_m2 = ForecastingModule.flexible_forecast(df_m2["actual"], M2_planning_model_params,
+                                                              dates["forecast_run_day"], dates["forecast_start_date"],
+                                                              dates["forecast_end_date"], dates["forecast_end_date"],
+                                                              m2_child_forecast_config)
+
             #  compute and save the case count forecast
             # TODO: Need to change saving all the planning and scenario forecasts into a single csv
             # Right now code it will break unless we add extra forecast csv artifacts for other scenarios
             forecasting_output = ForecastingModule.from_config(m2_child_forecast_config)
-            forecast_file_key = f'staffing_{case_name}'
-            forecasting_output.to_csv(output_artifacts.__getattribute__(forecast_file_key), index=False)
+            forecasting_output.to_csv(output_artifacts.__getattribute__(f'staffing_{case_name}'), index=False)
 
             # compute and save the staffing matrices
             active_count = float(
@@ -690,34 +699,30 @@ class ModelBuildingSession(BaseModel):
             staff_matrix_file_key = "staffing_" + case_name
             staffing_df.to_csv(output_artifacts.__getattribute__(staff_matrix_file_key), index=False)
 
-            # generate and save the plots (only CARDs)
-            df = ModelBuildingSession._generate_forecast_plot_data(region_type, region_name, data_source,
-                                                                   input_data_file, forecasting_output, dates)
-            # Is there an option in the function for only CARD plots
-            m2_forecast_plots(region_name, df["actual_m2"], df["smoothed_m2"], df["predictions_forecast_m2"],
-                              dates["train2_start_date"], dates["forecast_start_date"],
-                              pydantic_to_dict(output_artifacts), column_tags=['mean'], verbose=False,
-                              scenario=case_name)
+            vertical_lines = [
+                {'date': dates["train2_start_date"], 'color': 'brown', 'label': 'Train starts'},
+                {'date': dates["forecast_start_date"], 'color': 'black', 'label': 'Forecast starts'}
+            ]
+            df_m2_plot = dict()
+            df_m2_plot['actual'] = get_observations_subset(df_m2['actual'], dates["plot_start_date_m2"],
+                                                           dates["train2_end_date"])
+            df_m2_plot['smoothed'] = get_observations_subset(df_m2['smoothed'], dates["plot_start_date_m2"],
+                                                             dates["train2_end_date"])
+
+            multivariate_case_count_plot(df_m2_plot["actual"], df_m2_plot["smoothed"], df_predictions_train=None,
+                                         df_predictions_test=forecast_m2, vertical_lines=vertical_lines,
+                                         title=f'{region_name}: Scenario {case_name} - M2 forecast',
+                                         path=output_artifacts.__getattribute__(f'plot_M2_{case_name}_CARD'))
+
+            forecasting_output = pd.concat([forecasting_output, forecast_m2], axis=1)
+
+        write_file(forecasting_output, output_artifacts.M2_planning_output_forecast_file, "csv", "dataframe")
 
         outputs['metrics'] = metrics
         return outputs
 
-    def list_outputs(self):
-        self._validate_params_for_function('list_outputs')
-        outputs = ModelBuildingSession.list_outputs_static(self.output_artifacts)
-        return
-
     @staticmethod
     def list_outputs_static(output_artifacts, display_list=['model_building_report', 'planning_report']):
-        """
-
-        Args:
-            output_artifacts ():
-            display_list ():
-
-        Returns:
-
-        """
         outputs = {}
         print('Listing all the output artifacts from the session:\n')
         for key, value in output_artifacts.__fields__.items():
@@ -727,46 +732,9 @@ class ModelBuildingSession(BaseModel):
             render_artifact(output_artifacts.__getattribute__(a), ".md")
         return outputs
 
-    def log_session(self):
-        self._validate_params_for_function('log_session')
-        # Todo: Is this necessary? Can we flatten a pydantic object before logging?
-        params_to_log = pydantic_to_dict(self.params)
-        metrics_to_log = pydantic_to_dict(self.metrics)
-        output_artifacts_to_log = pydantic_to_dict(self.output_artifacts)
-        outputs = ModelBuildingSession.log_session_static(params_to_log, metrics_to_log, output_artifacts_to_log,
-                                                          self.params.experiment_name, self.params.session_name)
-        return
-
     @staticmethod
     def log_session_static(params, metrics, output_artifacts, experiment_name, session_name):
-        # Todo: Check for non-numeric types for metrics
-        outputs = {'flattened_params': flatten(params), 'flattened_metrics': flatten(metrics)}
-        # TODO: Locate input artifacts in params? Or specify full path in session_config and use get_field?
-        # input_artifacts = {(k, params[k]) for k in params['input_artifacts']}
-        # outputs['flattened_artifacts'] = merge_dicts([flatten(input_artifacts), flatten(output_artifacts)])
-        outputs['flattened_artifacts'] = flatten(output_artifacts)
-        mlflow_logger.log_to_mlflow(outputs['flattened_params'], outputs['flattened_metrics'],
-                                    outputs['flattened_artifacts'], experiment_name, session_name)
+        # TODO: Input artifacts
+        outputs = mlflow_logger.log_to_mlflow(params, metrics, output_artifacts,
+                                              experiment_name=experiment_name, run_name=session_name)
         return outputs
-
-    # TODO: not a clean function but just put this together to clean up the main calls
-    # Need to decide where this goes as well
-    @staticmethod
-    def _generate_forecast_plot_data(region_type, region_name, data_source, input_data_file, forecasting_output,
-                                     time_interval_config):
-        # TODO: check do we need this ?
-        forecasting_output = forecasting_output.reset_index()
-
-        df = DataFetcherModule.get_actual_smooth_for_region(region_type, [region_name], data_source=data_source,
-                                                            input_filepath=input_data_file)
-
-        df["actual_m2"] = get_observations_subset(df["actual"], time_interval_config['plot_start_date_m2'],
-                                                  time_interval_config["train2_end_date"])
-        df["smoothed_m2"] = get_observations_subset(df["smoothed"], time_interval_config['plot_start_date_m2'],
-                                                    time_interval_config["train2_end_date"])
-
-        df["predictions_forecast_m2"] = add_init_observations_to_predictions(df["actual"], forecasting_output,
-                                                                             time_interval_config["forecast_run_day"])
-        df["predictions_forecast_m2"]['date'] = pd.to_datetime(df["predictions_forecast_m2"]['date'], format='%m/%d/%y')
-
-        return df

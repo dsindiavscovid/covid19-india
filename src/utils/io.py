@@ -1,6 +1,7 @@
 import json
 
 import pandas as pd
+import simplejson
 
 
 def read_file(file_path, file_format, data_format, **kwargs):
@@ -28,3 +29,9 @@ def write_file(data, file_path, file_format, data_format, **kwargs):
     else:
         pass
     return
+
+
+def read_config_file(config_file_path):
+    with open(config_file_path) as config_file:
+        config_data = simplejson.load(config_file, object_pairs_hook=simplejson.OrderedDict)
+    return config_data

@@ -9,13 +9,10 @@ from hyperopt import hp
 from model_wrappers.base import ModelWrapperBase
 from seirsplus.models_SEIHRD_gen import SEIHRDModel
 from utils.hyperparam_util import hyperparam_tuning
-from utils.loss_util import evaluate_for_forecast
+from utils.metrics_util import evaluate_for_forecast
 
 
 class SEIHRD_gen(ModelWrapperBase):
-
-    def fit(self):
-        pass
 
     def __init__(self, model_parameters: dict):
         self.model_parameters = copy.deepcopy(model_parameters)
@@ -31,7 +28,7 @@ class SEIHRD_gen(ModelWrapperBase):
                 self.model_parameters["latent_information"]["latent_on"] = ForecastVariable(
                     self.model_parameters["latent_information"]["latent_on"])
 
-    def _convertLatentStrToForecastEntity(self, model_parameters):
+    def _convert_latent_str_to_forecast_entity(self, model_parameters):
         if "latent_information" in model_parameters.keys():
             if "latent_variables" in model_parameters["latent_information"].keys():
                 model_parameters["latent_information"]["latent_variables"] = [ForecastVariable(fv) for fv in
@@ -46,6 +43,9 @@ class SEIHRD_gen(ModelWrapperBase):
     def supported_forecast_variables(self):
         return [ForecastVariable.active, ForecastVariable.exposed, ForecastVariable.hospitalized,
                 ForecastVariable.recovered, ForecastVariable.deceased]
+
+    def fit(self):
+        pass
 
     def input_variables(self):
         return ForecastVariable.input_variables()
@@ -89,7 +89,7 @@ class SEIHRD_gen(ModelWrapperBase):
         search_space = kwargs.get("search_space", {})
         self._is_tuning = kwargs.get("is_tuning", False)
         self.model_parameters.update(search_space)
-        self.model_parameters = self._convertLatentStrToForecastEntity(copy.deepcopy(self.model_parameters))
+        self.model_parameters = self._convert_latent_str_to_forecast_entity(copy.deepcopy(self.model_parameters))
         n_days = (datetime.strptime(end_date, "%m/%d/%y") - datetime.strptime(run_day, "%m/%d/%y")).days + 1
         prediction_dataset = self.run(region_observations, region_metadata, run_day, n_days, latent_variables,
                                       latent_on)
@@ -101,12 +101,11 @@ class SEIHRD_gen(ModelWrapperBase):
         return True
 
     def get_latent_params(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, end_date: str,
-                          search_space: dict = {}, latent_variables: list = [],
-                          latent_on: ForecastVariable = ForecastVariable.confirmed):
+                          search_space: dict = {}):
         latent_variables = self.model_parameters['latent_information']['latent_variables']
         latent_on = self.model_parameters['latent_information']['latent_on']
         self.model_parameters.update(search_space)
-        self.model_parameters = self._convertLatentStrToForecastEntity(copy.deepcopy(self.model_parameters))
+        self.model_parameters = self._convert_latent_str_to_forecast_entity(copy.deepcopy(self.model_parameters))
         n_days = (datetime.strptime(end_date, "%m/%d/%y") - datetime.strptime(run_day, "%m/%d/%y")).days + 1
         prediction_dataset = self.run(region_observations, region_metadata, run_day, n_days, latent_variables,
                                       latent_on)
@@ -124,7 +123,7 @@ class SEIHRD_gen(ModelWrapperBase):
                 ed[latent_on.name])
         return params
 
-    def getOutsideToModelMap(self):
+    def get_outside_to_model_map(self):
         # Should cover all the variables required by model as input
         d = dict()
         d['initI'] = ForecastVariable.active.name
@@ -134,7 +133,7 @@ class SEIHRD_gen(ModelWrapperBase):
         d['initD'] = ForecastVariable.deceased.name
         return d
 
-    def getModelToOutside(self, estimator):
+    def get_model_to_outside(self, estimator):
         # Should cover all the variables returned by supported_forecast_variables
         d = dict()
         d[ForecastVariable.exposed.name] = estimator.numE
@@ -183,7 +182,7 @@ class SEIHRD_gen(ModelWrapperBase):
                         "%-m/%-d/%y")
 
                 new_latent_params = self.get_latent_params(region_metadata, region_observations, temp_run_day, run_day,
-                                                           latent_variables=latent_variables, latent_on=latent_on)[
+                                                           )[
                     'latent_params']
 
                 for latent_key in new_latent_params:
@@ -196,7 +195,7 @@ class SEIHRD_gen(ModelWrapperBase):
         for var in self.input_variables():
             initDict[var.name] = datasets[var.name][run_day]
 
-        oToM = self.getOutsideToModelMap()
+        oToM = self.get_outside_to_model_map()
         estimator = SEIHRDModel(beta=init_beta, sigma=init_sigma, gamma=init_gamma, alpha=init_alpha, delta=init_delta,
                                 kappa=init_kappa, initN=initN, initI=initDict[oToM['initI']],
                                 initE=initDict[oToM['initE']],
@@ -212,7 +211,7 @@ class SEIHRD_gen(ModelWrapperBase):
                                                latent_on)
         estimator.run(T=n_days, verbose=False)
 
-        mToO = self.getModelToOutside(estimator)
+        mToO = self.get_model_to_outside(estimator)
         data_frames = []
         for var in self.supported_forecast_variables():
             data_frames.append(self.alignTimeSeries(mToO[var.name], estimator.tseries, run_day, n_days, var.name))

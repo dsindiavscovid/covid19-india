@@ -6,7 +6,7 @@ from configs.base_config import TrainingModuleConfig
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.model_evaluator import ModelEvaluator
-from utils.config_util import read_config_file
+from utils.io import read_config_file
 
 
 class TrainingModule(object):

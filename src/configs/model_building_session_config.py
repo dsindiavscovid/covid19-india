@@ -63,7 +63,7 @@ class ModelBuildingSessionParams(BaseModel):
     user_name: str
     experiment_name: str
     output_dir: str
-    input_data_file: str = None
+    input_file_path: str = None
     interval_to_consider: int
 
     region_name: List[str]
@@ -78,7 +78,6 @@ class ModelBuildingSessionParams(BaseModel):
     train_loss_function: dict
     search_space: dict
     search_parameters: dict
-    # TODO: check if List[dict] is fine and choosing List[dict] instead of List[LossFunction] for uniform handling
     eval_loss_functions: List[dict]
     uncertainty_parameters: dict
     planning: dict

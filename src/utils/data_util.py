@@ -1,7 +1,8 @@
 import collections.abc
+import json
+from datetime import datetime, timedelta
 
 import pandas as pd
-import pydantic
 from entities.forecast_variables import ForecastVariable
 
 
@@ -117,7 +118,7 @@ def flatten(d, parent_key='', sep='_'):
     items = []
     for k, v in d.items():
         new_key = parent_key + sep + k if parent_key else k
-        if isinstance(v, collections.MutableMapping):
+        if isinstance(v, collections.abc.MutableMapping):
             items.extend(flatten(v, new_key, sep=sep).items())
         else:
             items.append((new_key, v))
@@ -172,10 +173,13 @@ def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
 
 
 def pydantic_to_dict(obj):
-    return_dict = dict()
-    for k, v in obj.__fields__.items():
-        if isinstance(v, pydantic.fields.ModelField):
-            return_dict[k] = obj.__getattribute__(k)
-        else:
-            return_dict[k] = v
-    return return_dict
+    return json.loads(json.dumps(obj, default=lambda o: o.__dict__))
+
+
+def make_clickable(val):
+    return '<a target="_blank" href="{}">{}</a>'.format(val, val)
+
+
+def get_date(date_str, offset):
+    return (datetime.strptime(date_str, "%m/%d/%y") + timedelta(days=offset)).strftime(
+        "%-m/%-d/%y")

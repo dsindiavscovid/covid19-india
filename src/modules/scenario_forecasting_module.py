@@ -10,8 +10,8 @@ from entities.intervention_variable import InputType
 from entities.model_class import ModelClass
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
-from utils.config_util import read_config_file
-from utils.data_transformer_helper import convert_to_initial_observations, convert_to_jhu_format_with_min_max
+from utils.data_util import convert_to_initial_observations, convert_to_jhu_format_with_min_max
+from utils.io import read_config_file
 
 
 class ScenarioForecastingModule(object):

@@ -262,9 +262,9 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
         df_predictions_test (pd.DataFrame): predictions for test interval
         train1_start_date (str): start date for train1 interval
         test1_start_date (str): start date for test1 interval
+        output_artifacts (dict): dictionary of output artifact paths
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
-        output_dir (str, optional): output directory path (default: '')
         verbose (bool, optional): if True, include additional plotting (uncertainty during training)
 
     """
@@ -288,7 +288,7 @@ def m1_plots(region_name, df_actual, df_smoothed, df_predictions_train, df_predi
 
     # Single variable plot
     for variable in variables:
-        path = output_artifacts[f'plot_M1_single_{variable}']  # TODO: This won't work for hospitalized
+        path = output_artifacts[f'plot_M1_single_{variable}']
         single_variable_case_count_plot(variable, df_actual, df_smoothed=df_smoothed,
                                         df_predictions_train=df_predictions_train,
                                         df_predictions_test=df_predictions_test, column_tags=column_tags,
@@ -306,6 +306,7 @@ def m2_plots(region_name, df_actual, df_smoothed, df_predictions_train, train2_s
         df_smoothed (pd.DataFrame): smoothed observations
         df_predictions_train (pd.DataFrame): predictions for train interval
         train2_start_date (str): start date for train2 interval
+        output_artifacts (dict): dictionary of output artifact paths
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
         verbose (bool, optional): if True, include additional plotting (uncertainty during training)
@@ -347,6 +348,7 @@ def m2_forecast_plots(region_name, df_actual, df_smoothed, df_predictions_foreca
         df_predictions_forecast (pd.DataFrame): predictions for forecast interval
         train2_start_date (str): start date for train2 interval
         forecast_start_date (str): start date for forecast interval
+        output_artifacts (dict): dictionary of output artifact paths
         column_tags (list, optional): tags indicating column from df_predictions to be plotted (default: None)
         variables (list, optional): list of variables to plot (default: None)
         verbose (bool, optional): if True, include additional plotting (uncertainty during training)
@@ -391,6 +393,7 @@ def distribution_plots(trials, variable, output_artifacts):
     Args:
         trials (pd.DataFrame): dataframe consisting of case counts, PDF and CDF for a variable
         variable (str): variable to plot
+        output_artifacts (dict): dictionary of output artifact paths
 
     """
     trials_new = deepcopy(trials)
@@ -404,35 +407,3 @@ def distribution_plots(trials, variable, output_artifacts):
 
     pdf_cdf_plot(variable, trials['case_counts'], trials['cdf'], case_counts_pdf=case_counts_pdf,
                  title=f'PDF and CDF for {variable}', path=output_artifacts['plot_planning_pdf_cdf'])
-
-
-def plot_data(region_name, df_actual, variables=None, plot_path=''):
-    """Plot actual observations
-
-    Args:
-        region_name (str): name of region
-        df_actual (pd.DataFrame): actual observations
-        variables (list, optional): list of variables to plot (default: None)
-        plot_path (str, optional): path to save plot (default: '')
-
-    """
-
-    if variables is None:
-        variables = [var.name for var in ForecastVariable.input_variables()]
-
-    fig, ax = plt.subplots(figsize=(16, 12))
-
-    for variable in variables:
-        ax.plot(df_actual['index'], df_actual[variable], 'o-',
-                color=plot_colors[variable], label=plot_labels[variable])
-
-    plot_format(ax)
-
-    plt.title(region_name)
-    plt.ylabel('Case counts')
-    plt.xlabel('Time')
-    plt.xticks(rotation=45)
-    plt.legend()
-    plt.grid()
-
-    plt.savefig(plot_path)

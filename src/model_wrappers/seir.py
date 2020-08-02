@@ -8,7 +8,7 @@ from hyperopt import hp
 from model_wrappers.base import ModelWrapperBase
 from seirsplus.models import *
 from utils.hyperparam_util import hyperparam_tuning
-from utils.loss_util import evaluate_for_forecast
+from utils.metrics_util import evaluate_for_forecast
 
 
 class SEIR(ModelWrapperBase):
