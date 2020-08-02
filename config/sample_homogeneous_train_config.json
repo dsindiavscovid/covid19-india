@@ -23,15 +23,39 @@
         }
 	},
 	"search_space": {
-		"r0": [0.7, 2],
-		"exposed_ratio": [0.001, 10],
-		"active_ratio": [0.001, 2],
-		"infectious_period": [3, 10],
-        "recovery_period" : [1, 25],
-        "deceased_period" : [1, 15],
-        "recovered_ratio" : [0.7, 1],
-        "beta": [0, 10]
-	},
+      "active_ratio": {
+        "low": 0.001,
+        "high": 2
+      },
+      "beta": {
+        "low": 0,
+        "high": 10
+      },
+      "deceased_period": {
+        "low": 1,
+        "high": 15
+      },
+      "exposed_ratio": {
+        "low": 0.001,
+        "high": 10
+      },
+      "infectious_period": {
+        "low": 3,
+        "high": 10
+      },
+      "r0": {
+        "low": 0.7,
+        "high": 2
+      },
+      "recovered_ratio": {
+        "low": 0.7,
+        "high": 1
+      },
+      "recovery_period": {
+        "low": 1,
+        "high": 25
+      }
+    },
 	"search_parameters": {
         "child_model": {
 		"max_evals": 10
@@ -41,47 +65,41 @@
         },
         "frac_for_child": 0.5
 	},
-	"training_loss_function": {
-		"metric_name": "mape",
-		"variable_weights": [{
-			"variable": "confirmed",
-			"weight": 0.25
-		}, {
-			"variable": "recovered",
-			"weight": 0.25
-		}, {
-			"variable": "deceased",
-			"weight": 0.25
-		}, {
-			"variable": "hospitalized",
-			"weight": 0.25
-		}]
-	},
-	"loss_functions": [{
-		"metric_name": "mape",
-		"variable_weights": [{
-			"variable": "confirmed",
-			"weight": 1
-		}]
-	},{
-		"metric_name": "mape",
-		"variable_weights": [{
-			"variable": "hospitalized",
-			"weight": 1
-		}]
-	},{
-		"metric_name": "mape",
-		"variable_weights": [{
-			"variable": "recovered",
-			"weight": 1
-		}]
-	},{
-		"metric_name": "mape",
-		"variable_weights": [{
-			"variable": "deceased",
-			"weight": 1
-		}]
-	}],
+	"train_loss_function": {
+      "metric_name": "mape",
+      "weights": {
+        "confirmed": 0.25,
+        "recovered": 0.25,
+        "deceased": 0.25,
+        "hospitalized": 0.25
+      }
+    },
+	"eval_loss_functions": [
+      {
+        "metric_name": "mape",
+        "weights": {
+          "confirmed": 1
+        }
+      },
+      {
+        "metric_name": "mape",
+        "weights": {
+          "recovered": 1
+        }
+      },
+      {
+        "metric_name": "mape",
+        "weights": {
+          "deceased": 1
+        }
+      },
+      {
+        "metric_name": "mape",
+        "weights": {
+          "hospitalized": 1
+        }
+      }
+    ],
 	"output_filepath": "",
 	"output_dir": "",
     "input_filepath": ""
