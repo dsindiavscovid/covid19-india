@@ -10,7 +10,7 @@ def hyperparam_tuning(func, search_space, max_evals, algo=tpe.suggest):
     best_ind = np.argmin(trial_loss)
     best_loss = trial_loss[best_ind]
     print("Best Loss:", best_loss)
-    
+
     trial_list = []
     for trial in trials:
         temp_params = dict()

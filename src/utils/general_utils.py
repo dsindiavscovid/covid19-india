@@ -23,11 +23,11 @@ def get_dict_field(d, key_list):
     """
         Gets a multi-level nested element specified by a list of keys in a dict object to the specified value
     """
-    # TODO: Check if this works and also move it to an appropriate utils file
+    # TODO: Check if this works and also move it to an appropriate utils file - check for pydantic
     # There should be alternate robust implementation via JSONPath or something else
     # dicts are mutable objects
     tmp = d
-    for i, k in key_list:
+    for i, k in enumerate(key_list):
         if i == len(key_list) - 1:
             return tmp[k]
         else:

@@ -2,9 +2,10 @@ import math
 from typing import List
 
 import numpy as np
+import pandas as pd
 from entities.loss_function import LossFunction
 from sklearn.metrics import mean_squared_error, mean_squared_log_error
-from utils.data_util import convert_dataframe
+from utils.data_util import convert_dataframe, to_dict
 
 
 def mean_absolute_percentage_error(y_true, y_pred):
@@ -78,3 +79,10 @@ def evaluate_for_forecast(observations, predictions_df, loss_functions: List[Los
         loss_function.value = value
         metrics_results.append(loss_function.dict())
     return metrics_results
+
+
+def loss_to_dataframe(loss_dict, name):
+    loss_dict = to_dict(loss_dict)
+    loss_df = pd.DataFrame(loss_dict)
+    loss_df.insert(0, column='', value=name)
+    return loss_df

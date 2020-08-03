@@ -19,7 +19,7 @@ def read_file(file_path, file_format, data_format, **kwargs):
 def write_file(data, file_path, file_format, data_format, **kwargs):
     if file_format == "json" and data_format == "dict":
         with open(file_path, 'w') as f_out:
-            json.dump(data, f_out)
+            json.dump(data, f_out, **kwargs)
     elif file_format == "csv" and data_format == "dataframe":
         if len(kwargs) == 0:
             data.to_csv(file_path, index=False)

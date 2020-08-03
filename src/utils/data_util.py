@@ -115,6 +115,16 @@ def loss_json_to_dataframe(loss_dict, name):
 
 
 def flatten(d, parent_key='', sep='_'):
+    """Flatten a nested dictionary
+
+    Args:
+        d (collections.abc.MutableMapping): input dictionary
+        parent_key (str):
+        sep (str):
+
+    Returns:
+
+    """
     items = []
     for k, v in d.items():
         new_key = parent_key + sep + k if parent_key else k
@@ -122,22 +132,6 @@ def flatten(d, parent_key='', sep='_'):
             items.extend(flatten(v, new_key, sep=sep).items())
         else:
             items.append((new_key, v))
-    return dict(items)
-
-
-def flatten_train_loss_config(config):
-    items = [('metric_name', config['metric_name'])]
-    for variable in config['variable_weights']:
-        items.append((variable['variable'] + '_weight', variable['weight']))
-    return dict(items)
-
-
-def flatten_eval_loss_config(config):
-    items = []
-    for loss in config:
-        variable = loss['variable_weights'][0]
-        items.append((variable['variable'] + '_metric_name', loss['metric_name']))
-        items.append((variable['variable'] + '_weight', variable['weight']))
     return dict(items)
 
 
@@ -172,7 +166,7 @@ def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
     return df_predictions
 
 
-def pydantic_to_dict(obj):
+def to_dict(obj):
     return json.loads(json.dumps(obj, default=lambda o: o.__dict__))
 
 

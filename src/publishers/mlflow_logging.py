@@ -5,7 +5,7 @@ import mlflow
 import pandas as pd
 from configs.model_building_session_config import ModelBuildingSessionParams, ModelBuildingSessionMetrics, \
     ModelBuildingSessionOutputArtifacts
-from utils.data_util import make_clickable, pydantic_to_dict, flatten
+from utils.data_util import make_clickable, flatten
 
 TRACKING_URL = "http://ec2-54-175-207-176.compute-1.amazonaws.com"
 
@@ -17,7 +17,7 @@ def log_to_mlflow(params, metrics, artifact_dict, tags=None, experiment_name="de
         params (dict of {str: str}): input parameters to the model
         metrics (dict of {str: numeric}): metrics output from the model
         artifact_dict (dict): file paths of artifacts
-        tags (dict):
+        tags (dict): dict of tags
         experiment_name (str): name of the MLflow experiment (default: "default")
         run_name (str): name of the MLflow run (default: None)
 
@@ -27,11 +27,11 @@ def log_to_mlflow(params, metrics, artifact_dict, tags=None, experiment_name="de
     mlflow.set_experiment(experiment_name)
 
     if isinstance(params, ModelBuildingSessionParams):
-        params = pydantic_to_dict(params)
+        params = params.dict()
     if isinstance(metrics, ModelBuildingSessionMetrics):
-        metrics = pydantic_to_dict(metrics)
+        metrics = metrics.dict()
     if isinstance(artifact_dict, ModelBuildingSessionOutputArtifacts):
-        artifact_dict = pydantic_to_dict(artifact_dict)
+        artifact_dict = artifact_dict.dict()
 
     params = flatten(params)
     metrics = flatten(metrics)

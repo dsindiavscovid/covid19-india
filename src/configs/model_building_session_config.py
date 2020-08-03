@@ -17,6 +17,7 @@ class ModelBuildingSessionOutputArtifacts(BaseModel):
     plot_M1_single_deceased: str
     plot_M1_single_recovered: str
     M1_model_params: str
+    M1_model: str
     M1_beta_trials: str
     M1_param_ranges: str
     M1_train_config: str
@@ -33,6 +34,7 @@ class ModelBuildingSessionOutputArtifacts(BaseModel):
     plot_M2_forecast_single_deceased: str
     plot_M2_forecast_single_recovered: str
     M2_model_params: str
+    M2_model: str
     M2_beta_trials: str
     M2_param_ranges: str
     M2_percentile_params: str

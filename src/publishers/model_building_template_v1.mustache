@@ -4,7 +4,7 @@
 
 ### Data Source
 
-{{params_data_source}} - [{{params_data_file_path}}]({{params_data_file_path}})
+{{params_data_source}} - [{{params_input_file_path}}]({{params_input_file_path}})
 
 ### Time Intervals for Training, Evaluation and Forecast
 ```yaml
@@ -25,19 +25,19 @@ Search Configuration:
 ```
 Training Loss Function: 
 ```yaml
-{{params_train_loss_function_config}}
+{{params_train_loss_function}}
 ```
 Evaluation Loss Function: 
 ```yaml
-{{params_eval_loss_function_config}}
+{{params_eval_loss_functions}}
 ```
-Forecast Percentiles: {{params_forecast_percentiles}}
+Forecast Percentiles: {{params_uncertainty_parameters_percentiles}}
 
 ## Training and Evaluation - Model M1 Results
 
 Parameter values and ranges: 
 
-{{metrics_M1_param_ranges}}
+{{artifact_list_M1_param_ranges}}
 
 Beta: {{metrics_M1_beta}}
 
@@ -61,7 +61,7 @@ Loss values:
 
 Parameter values and ranges:
 
-{{metrics_M2_param_ranges}}
+{{artifact_list_M2_param_ranges}}
 
 Beta: {{metrics_M2_beta}}
 
@@ -83,7 +83,7 @@ Loss values:
 
 Representative trials for various percentiles:
 
-{{metrics_M2_percentile_params}}
+{{artifact_list_M2_percentile_params}}
 
 Forecasts:
 
@@ -99,8 +99,8 @@ Forecasts:
 
 ## Planning  Forecast
 
-* Planning Variable:  {{params_forecast_planning_variable}}
-* Planning Date:  {{params_forecast_planning_date}}
+* Planning Variable:  {{params_uncertainty_parameters_variable_of_interest}}
+* Planning Date:  {{params_uncertainty_parameters_date_of_interest}}
 
 ![Planning Date Forecast Distribution ]({{artifact_list_plot_planning_pdf_cdf}})
 
@@ -110,7 +110,7 @@ Forecast CSV file: [Forecast csv]({{artifact_list_output_forecast_file}})
 
 ## Additional Artifacts 
 
-* M1 Ensemble model: {{artifact_list_M1_ensemble}}
-* M1 Beta exploration: {{artifact_list_M1_beta_exploration}}
-* M2 Ensemble model: {{artifact_list_M2_ensemble}}
-* M2 Beta exploration: {{artifact_list_M2_beta_exploration}}
+* M1 Ensemble model: [{{artifact_list_M1_model}}]({{artifact_list_M1_model}})
+* M1 Beta exploration: [{{artifact_list_M1_beta_trials}}]({{artifact_list_M1_beta_trials}})
+* M2 Ensemble model: [{{artifact_list_M2_model}}]({{artifact_list_M2_model}})
+* M2 Beta exploration: [{{artifact_list_M2_beta_trials}}]({{artifact_list_M2_beta_trials}})

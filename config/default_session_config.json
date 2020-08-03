@@ -8,6 +8,7 @@
     "plot_M1_single_deceased": "m1_deceased.png",
     "plot_M1_single_recovered": "m1_recovered.png",
     "M1_model_params": "m1_model_params.json",
+    "M1_model": "m1_model.json",
     "M1_beta_trials": "m1_beta_trials.json",
     "M1_param_ranges": "m1_param_ranges.json",
     "M1_train_config": "m1_train_config.json",
@@ -24,6 +25,7 @@
     "plot_M2_forecast_single_deceased": "m2_forecast_deceased.png",
     "plot_M2_forecast_single_recovered": "m2_forecast_recovered.png",
     "M2_model_params": "m2_model_params.json",
+    "M2_model": "m2_model.json",
     "M2_beta_trials": "m2_beta_trials.json",
     "M2_param_ranges": "m2_param_ranges.json",
     "M2_percentile_params": "m2_percentile_params.csv",
@@ -34,7 +36,7 @@
     "plot_M2_scenario_1_CARD": "planning_level_scenario_1_m2_forecast.png",
     "plot_M2_scenario_2_CARD": "planning_level_scenario_2_m2_forecast.png",
     "plot_M2_scenario_3_CARD": "planning_level_scenario_3_m2_forecast.png",
-    "M2_planning_model_params": "m2_planning_model_params",
+    "M2_planning_model_params": "m2_planning_model_params.json",
     "M2_planning_output_forecast_file": "planning_forecast.csv",
     "staffing_planning": "staffing_planning.csv",
     "staffing_scenario_1": "staffing_scenario_1.csv",
@@ -227,7 +229,7 @@
     "comments": "",
     "input_artifacts": [
       "input_file_path",
-      "staffing_ratios_file"
+      "staffing.staffing_ratios_file"
     ]
   }
 }

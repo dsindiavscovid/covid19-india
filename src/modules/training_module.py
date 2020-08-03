@@ -1,5 +1,3 @@
-import json
-import os
 from datetime import datetime, timedelta
 
 from configs.base_config import TrainingModuleConfig
@@ -54,12 +52,7 @@ class TrainingModule(object):
                                                                                   config.eval_loss_functions,
                                                                                   config.input_filepath)
 
-        if config.output_dir is not None and config.output_file_prefix is not None:
-            with open(os.path.join(config.output_dir, f'{config.output_file_prefix}_output.json'), 'w') as outfile:
-                json.dump(results, outfile, indent=4)
-        # if config.output_dir is not None and config.output_file_prefix is not None:
-        #     with open(os.path.join(config.output_dir, f'{config.output_file_prefix}_model.json'), 'w') as outfile:
-        #         json.dump(training_module._model, outfile, indent=4)
+        results['model'] = training_module._model
         return results
 
     @staticmethod

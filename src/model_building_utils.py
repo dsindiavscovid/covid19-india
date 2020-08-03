@@ -1,532 +1,959 @@
-import json
 import os
+import logging
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime
 
-import matplotlib.pyplot as plt
+import domain_info.staffing as domain_info
 import mlflow
 import pandas as pd
-from IPython.display import Markdown, display
-from configs.base_config import ForecastingModuleConfig
+import publishers.mlflow_logging as mlflow_logger
+import publishers.report_generation as reporting
+from configs.base_config import TrainingModuleConfig, ModelEvaluatorConfig, ForecastingModuleConfig
+from configs.model_building_session_config import ModelBuildingSessionOutputArtifacts, ModelBuildingSessionParams, \
+    ModelBuildingSessionMetrics
 from model_wrappers.model_factory import ModelFactory
 from modules.data_fetcher_module import DataFetcherModule
 from modules.forecasting_module import ForecastingModule
-from nb_utils import train_eval_plot_ensemble
-from publishers.mlflow_logging import get_previous_runs, log_to_mlflow
-from publishers.report_generation import create_report
-from utils.data_util import flatten_train_loss_config, flatten_eval_loss_config, flatten, \
-    get_observations_subset, add_init_observations_to_predictions
-from utils.plotting import m2_forecast_plots, plot_data
-from domain_info.staffing import get_clean_staffing_ratio, compute_staffing_matrix
+from modules.model_evaluator import ModelEvaluator
+from modules.training_module import TrainingModule
+from pydantic import BaseModel
+from utils.data_util import get_observations_subset, to_dict, get_date
+from utils.general_utils import create_output_folder, render_artifact, set_dict_field, get_dict_field
+from utils.io import read_file, write_file
+from utils.metrics_util import loss_to_dataframe
+from utils.plotting import m1_plots, m2_plots, m2_forecast_plots, distribution_plots, multivariate_case_count_plot
 
 
-def create_session(session_name, user_name='guest'):
-    if session_name is None:
-        current_date = datetime.now().date().strftime('%-m/%-d/%y')
-        session_name = user_name + current_date
-    # Directory to store the outptus from the current session
-    dir_name = session_name + '_outputs'
-    # Check if the directory exists
-    # if yes, raise a warning; else create a new directory
-    path_prefix = '../outputs'
-    output_dir = os.path.join(path_prefix, dir_name)
-    if os.path.isdir(output_dir):
-        print(f"{output_dir} already exists. Your logs might get overwritten.")
-        print("Please change the session name to retain previous logs")
-        pass
-    else:
-        os.mkdir(output_dir)
-    current_session = ModelBuildingSession(session_name)
-    current_session.set_param('output_dir', dir_name)
-    current_session.set_param('experiment_name', 'SEIHRD_ENSEMBLE_V0')
-    current_session.set_param('run_name', session_name)
-    current_session.set_param('model_class', 'homogeneous_ensemble')
-    current_session.print_parameters()
-    #TOFIX
-    current_session.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest'] = '7/5/20'
-    return current_session
+# TODO:
+# PEP8 compliance
+# Exception handling - especially coming from BaseModel
+# ML FLow and official pipeline setup decisions - same or separate for each city
+# Message logging - currently just a simple print
+# Session representation - should we choose one more level of nesting,
+# e.g., data config that contains region_name, region_type, model_building_config that contains
+# all items related to model_building so that the code gets simplified - only problem is that
+# the referencing each nested field will require slightly longer paths.
+# Proper handling to what-if-scenarios rather than the current limited hardcoding
 
 
-class ModelBuildingSession:
+class ModelBuildingSession(BaseModel):
     """
         Session object to encapsulate the model building
         and training process.
-
-
     """
-    def __init__(self, sess_name):
-        self.sess_name = sess_name
-        self.params = dict()
-        self.model_params = None  # Placeholder for trained model parameters
-        self.load_default_configs()
-        self.init_mandatory_params()
-        self.init_config_params()
-        self.init_mlflow_athena_config()
-        self.params_to_log = dict()
-        self.metrics_to_log = dict()
-        self.artifacts_dict = dict()
+    output_artifacts: ModelBuildingSessionOutputArtifacts
+    params: ModelBuildingSessionParams
+    metrics: ModelBuildingSessionMetrics
 
-    def load_default_configs(self):
-        """
-        Read from config files?
-        """
-        with open('../config/sample_homogeneous_train_config.json') as f_train, \
-            open('../config/sample_homogeneous_test_config.json') as f_test, \
-            open('../config/sample_homogeneous_forecast_config.json') as f_forecast:
-            self.train_config = json.load(f_train)
-            self.test_config = json.load(f_test)
-            self.forecast_config = json.load(f_forecast)
+    # Constant filepaths
+    _DEFAULT_SESSION_CONFIG: str = "../config/default_session_config.json"
+    _ML_FLOW_CONFIG: str = "mlflow_credentials.json"
+    _OFFICIAL_DATA_PIPELINE_CONFIG: str = "../../pyathena/pyathena.rc"
+    _DEFAULT_ROOT_DIR: str = "../outputs/"
+    _DEFAULT_MODEL_BUILDING_REPORT_TEMPLATE: str = '../src/publishers/model_building_template_v1.mustache'
+    _DEFAULT_PLANNING_REPORT_TEMPLATE: str = '../src/publishers/planning_template_v1.mustache'
 
-        self.time_interval_config = None
-        self.param_search_config = None
-        self.train_loss_config = None
-        self.eval_loss_config = None
-    
-    def init_mlflow_athena_config(self):
-        with open('/Users/shreyas.shetty/mlflow_config.json') as f_mlflow:
-            mlflow_config = json.load(f_mlflow)
+    def __init__(self, session_name, user_name='guest'):
+
+        # load up the default configuration
+        super().__init__(**read_file(ModelBuildingSession._DEFAULT_SESSION_CONFIG, "json", "dict"))
+
+        # set up session_name
+        self._set_session_name(session_name, user_name)
+
+        # set up logging
+        logging.basicConfig(filename=self.output_artifacts.session_log)
+
+        # set up the permissions for mlflow and data pipeline
+        ModelBuildingSession._init_mlflow_datapipeline_config()
+
+        # create output folder
+        create_output_folder(self.params.session_name + '_outputs', ModelBuildingSession._DEFAULT_ROOT_DIR)
+
+    def _set_session_name(self, session_name, user_name):
+        """
+
+        Args:
+            session_name (str):
+            user_name (str):
+
+        Returns:
+
+        """
+        # create a session name if not given
+        if session_name is None:
+            current_date = datetime.now().date().strftime('%-m/%-d/%y')
+            session_name = user_name + current_date
+        self.params.session_name = session_name
+        self.params.user_name = user_name
+
+        # fix the output_directory and default paths for output artifacts
+        self.params.output_dir = os.path.join(ModelBuildingSession._DEFAULT_ROOT_DIR, f'{session_name}_outputs')
+        for key, value in self.output_artifacts.__fields__.items():
+            self.output_artifacts.__setattr__(key, os.path.join(self.params.output_dir,
+                                                                self.output_artifacts.__getattribute__(key)))
+
+    def _validate_params_for_function(self, func_str):
+        """Checks if the parameters required for a function are populated and throws an exception if not
+
+        Args:
+            func_str (str):
+
+        Returns:
+
+        """
+        mandatory_params = {}
+        mandatory_params['view_forecasts'] = ['region_type', 'region_name']
+        mandatory_params['examine_data'] = ['region_type', 'region_name']
+        mandatory_params['build_models_and_generate_forecast'] = ['model_class']
+        mandatory_params['generate_planning_outputs'] = []
+        mandatory_params['list_outputs'] = []
+        mandatory_params['log_session'] = []
+
+        param_list = mandatory_params[func_str]
+
+        for param in param_list:
+            if not self.get_field(param):
+                msg = (
+                    f'Cannot run function {func_str}\n'
+                    f'Mandatory input session parameters are not populated\n'
+                )
+                raise Exception(msg)
+
+        return
+
+    def get_field(self, param_name, top_field='params'):
+        """
+
+        Args:
+            param_name (str):
+            top_field (str, optional):
+
+        Returns:
+
+        """
+        param_part_list = param_name.split('.')
+        top_param = param_part_list[0]
+        rest_params = param_part_list[1:]
+
+        ref_obj = self.__getattribute__(top_field)
+        # top level param field
+        if len(param_part_list) == 1:
+            output_field = ref_obj.__getattribute__(top_param)
+        else:
+            # nested param field (for dicts alone)
+            tmp_obj = ref_obj.__getattribute__(top_param)
+            output_field = get_dict_field(tmp_obj, rest_params)
+        return output_field
+
+    def set_field(self, param_name, param_value, top_field='params'):
+        """Set a specified possibly nested parameter to the specified value
+
+        Args:
+            param_name (str):
+            param_value (Any):
+            top_field (str):
+
+        Returns:
+
+        """
+        # TODO: LATER Type checking
+        # Does validation based on BaseModel already happen
+        # What is the notion of a session? Can values once set by user again be overridden by the user?
+        # There might be mismatch between logged values
+
+        param_part_list = param_name.split('.')
+        top_param = param_part_list[0]
+        rest_params = param_part_list[1:]
+
+        if top_field == 'params':
+            ref_obj = self.__getattribute__(top_field)
+        else:
+            msg = (
+                f'Unknown or uneditable session input category {top_field}\n'
+                f'Cannot set field value \n'
+            )
+            print(msg)
+            pass
+
+        # top level param field
+        if len(param_part_list) == 1:
+            ref_obj.__setattr__(top_param, param_value)
+        else:
+            # nested param field (for dicts alone)
+            tmp_obj = ref_obj.__getattribute__(top_param)
+            tmp_obj = set_dict_field(tmp_obj, rest_params, param_value)
+            ref_obj.__setattr__(top_param, tmp_obj)
+        return
+
+    def view_forecasts(self):
+        """
+
+        Returns:
+
+        """
+        self._validate_params_for_function('view_forecasts')
+        sp = self.params
+        outputs = ModelBuildingSession.view_forecasts_static(sp.experiment_name, sp.region_name,
+                                                             sp.interval_to_consider)
+        return outputs['links_df']
+
+    def examine_data(self):
+        """
+
+        Returns:
+
+        """
+        self._validate_params_for_function('examine_data')
+        sp = self.params
+        outputs = ModelBuildingSession.examine_data_static(sp.region_name, sp.region_type, sp.data_source,
+                                                           sp.input_file_path, self.output_artifacts)
+        return
+
+    def build_models_and_generate_forecast(self):
+        """
+
+        Returns:
+
+        """
+        self._validate_params_for_function('build_models_and_generate_forecast')
+        sp = self.params
+        sp.time_interval_config = ModelBuildingSession._compute_dates(sp.time_interval_config)
+        outputs = ModelBuildingSession.build_models_and_generate_forecast_static(True, sp.region_name, sp.region_type,
+                                                                                 sp.data_source, sp.input_file_path,
+                                                                                 sp.time_interval_config,
+                                                                                 sp.model_class, sp.model_parameters,
+                                                                                 sp.train_loss_function,
+                                                                                 sp.search_space, sp.search_parameters,
+                                                                                 sp.eval_loss_functions,
+                                                                                 sp.uncertainty_parameters,
+                                                                                 self.output_artifacts, sp.output_dir)
+
+        for metric, value in outputs['metrics'].items():
+            self.metrics.__setattr__(metric, value)
+
+        print(self.metrics.dict())
+
+        # creating report outside of the static_method to keep it simple
+        reporting.create_report(self.params, self.metrics, self.output_artifacts,
+                                template_path=ModelBuildingSession._DEFAULT_MODEL_BUILDING_REPORT_TEMPLATE,
+                                report_path=self.output_artifacts.model_building_report)
+
+        return outputs['metrics']
+
+    def generate_planning_outputs(self):
+        """
+
+        Returns:
+
+        """
+        self._validate_params_for_function('generate_planning_outputs')
+        sp = self.params
+
+        # NOTE: we kept the model_params transfer explicit and separate from that of output_artifacts in case we
+        # we change how we log and transfer objects during the session
+        outputs = ModelBuildingSession.generate_planning_outputs_static(sp.region_name, sp.region_type, sp.data_source,
+                                                                        sp.input_file_path, sp.time_interval_config,
+                                                                        sp.model_class,
+                                                                        sp.uncertainty_parameters, sp.planning,
+                                                                        sp.staffing,
+                                                                        self.output_artifacts.M2_model_params,
+                                                                        self.output_artifacts, sp.output_dir)
+        self.metrics.__fields__.update(outputs['metrics'])
+
+        # creating report outside of the static_method to keep it simple
+        reporting.create_report(self.params, self.metrics, self.output_artifacts,
+                                template_path=ModelBuildingSession._DEFAULT_PLANNING_REPORT_TEMPLATE,
+                                report_path=self.output_artifacts.planning_report)
+
+        return outputs['metrics']
+
+    def list_outputs(self):
+        """
+
+        Returns:
+
+        """
+        self._validate_params_for_function('list_outputs')
+        outputs = ModelBuildingSession.list_outputs_static(self.output_artifacts)
+        return
+
+    def log_session(self):
+        """
+
+        Returns:
+
+        """
+        self._validate_params_for_function('log_session')
+        outputs = ModelBuildingSession.log_session_static(self.params, self.metrics, self.output_artifacts,
+                                                          self.params.experiment_name, self.params.session_name)
+        return
+
+    @staticmethod
+    def _init_mlflow_datapipeline_config():
+        """
+
+        Returns:
+
+        """
+        # MLflow configuration
+        mlflow_config = read_file(ModelBuildingSession._ML_FLOW_CONFIG, "json", "dict")
         mlflow.set_tracking_uri(mlflow_config['tracking_url'])
         os.environ['MLFLOW_TRACKING_USERNAME'] = mlflow_config['username']
         os.environ['MLFLOW_TRACKING_PASSWORD'] = mlflow_config['password']
 
-        # Source the pyathena configuration
-        os.system('source ../../pyathena/pyathena.rc')
+        # Official pipeline configuration
+        os.system('source ' + ModelBuildingSession._OFFICIAL_DATA_PIPELINE_CONFIG)
+        return
 
+    @staticmethod
+    def _compute_dates(time_interval_config):
+        """Compute all the dates in time_interval_config in a consistent way
 
-    def init_mandatory_params(self):
-        self.mandatory_params = dict()
-        self.mandatory_params['view_forecasts'] = ['experiment_name', 'region_type', 'region_name']
-        self.mandatory_params['examine_data'] = ['region_type', 'region_name']
-        self.mandatory_params['build_models_and_generate_forecast'] = ['model_class']
-        self.mandatory_params['generate_planning_outputs'] = []
-        self.mandatory_params['list_outputs'] = []
-        self.mandatory_params['log_session'] = []
+        Args:
+            time_interval_config (dict):
 
-    def init_config_params(self):
-        self.params['experiment_name'] = 'SEIHRD_ENSEMBLE_V0'
-        
-        #TODO: Load Athena config params
+        Returns:
 
-        self.params['data_filepath'] = None
-        self.params['planning_variable'] = 'confirmed'
-
-        self.params['train_loss_function_config.C_weight'] = 0.25
-        self.params['train_loss_function_config.A_weight'] = 0.25
-        self.params['train_loss_function_config.R_weight'] = 0.25
-        self.params['train_loss_function_config.D_weight'] = 0.25
-
-        # Will set the train, forecast intervals
-        # TODO: Need to set the train_eval_plot_ensemble() function to
-        # accept the right intervals
-        # Currently the function takes in a deterministic interval on the train duration
-        #self.params['time_interval_config.train_start_date'] = datetime.now().date()
-        #self.params['time_interval_config.train_end_date'] = datetime.now().date()
-        #self.params['time_interval_config.backtesting_split_date'] = datetime.now().date()
-        #self.params['time_interval_config.forecast_start_date'] = datetime.now().date() 
-        #self.params['time_interval_config.forecast_end_date'] = datetime.now().date()
-        #self.params['time_interval_config.forecast_planning_date'] = datetime.now().date()
-
-        self.params['bed_type_ratio'] = {'CCC2':0.62, 'DCHC':0.17,'DCH':0.16,'ICU':0.05}
-        self.params['bed_multiplier_count'] = 100
-        self.params['planning_level'] = 80
-        self.params['rt_multiplier_list'] = [0.9, 1.1, 1.2]
-    
-    def print_parameters(self):
-        for param in self.params:
-            print('{} : {}'.format(param, self.params[param]))
-    
-    def validate_params(self, param_list):
         """
-        Validation should include the particular function
-        we want to validate.
-        Need to work out the details.
-        
-        Pydantic?
+        # Note: expectation is that either the user specifies ALL the dates in "direct" mode
+        # or we would populate it based on the offsets and reference day
+        is_direct_mode = True
+        for k in time_interval_config["direct"]:
+            if not time_interval_config["direct"][k]:
+                is_direct_mode = False
+                break
 
-        For now; implemented as a check on the presence of all the 
-        params from the pre-defined list of parameters corresponding 
-        to each function.
+        # if not direct/expert mode, reference_day is set to today if not specified by user
+        # and other dates in the direct mode are computed accordingly
+        if not is_direct_mode:
+
+            if not time_interval_config["offset_based"]["reference_day"]:
+                d0 = datetime.today().strftime("%-m/%-d/%y")
+                time_interval_config["offset_based"]["reference_day"] = d0
+            else:  # Added
+                d0 = time_interval_config["offset_based"]["reference_day"]
+            # compute the direct_mode dates based on this
+            d = {}
+            offsets = time_interval_config["offset_based"]
+            d["forecast_end_date"] = get_date(d0, offsets["forecast_period"])
+            d["forecast_run_day"] = get_date(d0, 0)
+            d["forecast_start_date"] = get_date(d0, 1)
+            d["test_end_date"] = get_date(d0, 0)
+            d["test_run_day"] = get_date(d0, -offsets["test_period"] - 1)
+            d["test_start_date"] = get_date(d0, -offsets["test_period"])
+            d["train1_end_date"] = get_date(d0, -offsets["test_period"] - 1)
+            d["train1_run_day"] = get_date(d0, -offsets["test_period"] - offsets["train_period"] - 2)
+            d["train1_start_date"] = get_date(d0, -offsets["test_period"] - offsets["train_period"] - 1)
+            d["train2_end_date"] = get_date(d0, 0)
+            d["train2_run_day"] = get_date(d0, -offsets["train_period"] - 1)
+            d["train2_start_date"] = get_date(d0, -offsets["train_period"])
+            d["plot_start_date_m1"] = get_date(d0, -offsets["test_period"] - offsets["train_period"] - offsets[
+                "plot_buffer"] - 1)
+            d["plot_start_date_m2"] = get_date(d0, -offsets["train_period"] - offsets["plot_buffer"])
+            time_interval_config["direct"] = d
+
+        return time_interval_config
+
+    @staticmethod
+    def _generate_model_operations_config(region_name, region_type, data_source, input_filepath, time_interval_config,
+                                          model_class, model_parameters, train_loss_function, search_space,
+                                          search_parameters, eval_loss_functions, uncertainty_parameters, model_file,
+                                          operation, output_dir):
         """
-        for param in param_list:
-            if param not in self.params:
-                raise Exception('Please check the list of parameters')
-    
-    def set_param(self, param, param_value):
+
+        Args:
+            region_name (list):
+            region_type (str):
+            data_source (DataSource):
+            input_filepath (str):
+            time_interval_config (dict):
+            model_class (ModelClass):
+            model_parameters (dict, optional):
+            train_loss_function (dict, optional):
+            search_space (dict, optional):
+            search_parameters (dict, optional):
+            eval_loss_functions (list, optional):
+            uncertainty_parameters (dict, optional):
+            model_file (str, optional):
+            operation (str):
+            output_dir (str):
+
+        Returns:
+
         """
-        Q: How to we allow for setting config params?
-        For example: train_loss_function_config.C_weight?
-        """
-        # Some more type checking of sorts
-        # I should not be able to change already set parameters
 
-        # TODO: Check with parameter override options
-        #if param in self.params:
-        #    return # Will address the override param functionality later
-        #else:
-        #    self.params[param] = param_value
+        cfg = dict()
 
-        self.params[param] = param_value
-    
-    def view_forecasts(self):
-        mandatory_params = self.mandatory_params['view_forecasts']
-        self.validate_params(mandatory_params)
-        # Use intervals, region_type and region_name
-        # as arguments to the forecast function
-        
-        # Where will we get the stored models from?
-        pass
-        #TODO: Do we have separate experiments for individual cities?
-        #for now, assume a common experiment name; depending on the model_class
-        experiment_name = self.params['experiment_name']
-        region_name = self.params['region_name']
+        # set the common elements
+        # Note: if the keys are aligned and this function was called as a ModelBuildingSession instance method,
+        # we could have done a dict update for the subset of keys
+        cfg['data_source'] = data_source
+        cfg['region_name'] = region_name if isinstance(region_name, list) else [region_name]
+        cfg['region_type'] = region_type
+        cfg['model_class'] = model_class
+        cfg['input_filepath'] = input_filepath
+        cfg['output_file_prefix'] = operation
+        cfg['output_dir'] = output_dir
 
-        if 'interval_to_consider' in self.params:
-            interval = self.params['interval_to_consider']
+        # set the extra elements necessary
+        if operation in ["M1_train", "M2_train"]:
+
+            # set all the learning elements
+            # TODO: make sure the module configs and the default session config are consistent
+            # items to rename in the configs and also the corresponding modules
+            # remove forecast_variables from forecasting module config ??
+            cfg['model_parameters'] = model_parameters
+            # TODO: if input arg is unspecified it will be None
+            cfg['model_parameters']["uncertainty_parameters"] = uncertainty_parameters
+            cfg['search_space'] = search_space
+            cfg['search_parameters'] = search_parameters
+            cfg['train_loss_function'] = train_loss_function  # need train-config and train module change
+            cfg['eval_loss_functions'] = eval_loss_functions  # need eval config and eval module change
+
+            # set the time interval
+            if operation == "M1_train":
+                cfg['train_start_date'] = time_interval_config["direct"]["train1_start_date"]
+                cfg['train_end_date'] = time_interval_config["direct"]["train1_end_date"]
+            else:
+                cfg['train_start_date'] = time_interval_config["direct"]["train2_start_date"]
+                cfg['train_end_date'] = time_interval_config["direct"]["train2_end_date"]
+
+        elif operation in ["M1_test"]:
+
+            cfg['model_parameters'] = read_file(model_file, "json", "dict")
+            cfg['eval_loss_functions'] = eval_loss_functions
+            cfg['test_run_day'] = time_interval_config["direct"]["test_run_day"]
+            cfg['test_start_date'] = time_interval_config["direct"]["test_start_date"]
+            cfg['test_end_date'] = time_interval_config["direct"]["test_end_date"]
+
+        # check all the different variants !
+        elif operation in ['forecast']:
+            # TODO: Later version - we need to set uncertainty, prediction mode, model_parameters and the dates
+            cfg['model_parameters'] = read_file(model_file, "json", "dict")
+            cfg['model_parameters']["uncertainty_parameters"] = uncertainty_parameters
+            cfg['forecast_run_day'] = time_interval_config["direct"]["forecast_run_day"]
+            cfg['forecast_start_date'] = time_interval_config["direct"]["forecast_start_date"]
+            cfg['forecast_end_date'] = time_interval_config["direct"]["forecast_end_date"]
         else:
-            interval = 0
-
-        links_df = get_previous_runs(experiment_name, region_name, interval)
-
-        return links_df
-    
-    def examine_data(self):
-        mandatory_params = self.mandatory_params['examine_data']
-        self.validate_params(mandatory_params)
-        # Get data from data_fetcher module and 
-        # generate outputs csv's in the appropriate paths
-        
-        # Where do we get the input csv if the user wants to upload one?
-        if 'case_cnt_plot_file_name' in self.params:
-            plot_fname = self.params['case_cnt_plot_file_name']
-        else:
-            plot_fname = 'case_cnt_plot.png'
-            self.params['case_cnt_plot_file_name'] = plot_fname
-
-        if 'case_cnt_csv_file_name' in self.params:
-            csv_fname = self.params['case_cnt_csv_file_name']
-        else:
-            csv_fname = 'case_cnt.csv'
-            self.params['case_cnt_csv_file_name'] = csv_fname
-
-        region_type = self.params['region_type']
-        region = self.params['region_name']
-        data_source = self.params['data_source']
-        data_path = self.params['data_filepath']
-        output_dir_name = self.params['output_dir']
-        dir_prefix = '../outputs'
-
-        plot_data(region, region_type, output_dir_name, dir_prefix=dir_prefix, data_source=data_source,
-                  data_path=data_path, plot_name=plot_fname, csv_name=csv_fname)
-        
-
-    def setup_defaults(self):
-        model_class = self.params['model_class'] #'homogeneous_ensemble'
-        self.train_config['model_class'] = model_class
-        self.test_config['model_class'] = model_class
-        self.forecast_config['model_class'] = model_class
-
-        c_weight = self.params['train_loss_function_config.C_weight']
-        a_weight = self.params['train_loss_function_config.A_weight']
-        r_weight = self.params['train_loss_function_config.R_weight']
-        d_weight = self.params['train_loss_function_config.D_weight']
-
-        # The default config file uses a list of dictionaries for the 
-        # weights on the individual buckets in the order of 'c', 'a', 'r', 'd'
-        self.train_config['training_loss_function']['variable_weights'][0]['weight'] = c_weight
-        self.train_config['training_loss_function']['variable_weights'][1]['weight'] = a_weight
-        self.train_config['training_loss_function']['variable_weights'][2]['weight'] = r_weight
-        self.train_config['training_loss_function']['variable_weights'][3]['weight'] = d_weight
-
-        #self.train_config['train_start_date'] = self.params['time_interval_config.train_start_date']
-        #self.train_config['train_end_date'] = self.params['time_interval_config.train_end_date']
-        #backtesting_split_date = self.params['time_interval_config.backtesting_split_date']
-
-        forecast_start_date = self.params['time_interval_config.forecast_start_date']
-        forecast_end_date = self.params['time_interval_config.forecast_end_date']
-        self.forecast_config['forecast_start_date'] = forecast_start_date
-        self.forecast_config['forecast_end_date'] = forecast_end_date
-
-        forecast_planning_date = self.params['time_interval_config.forecast_planning_date']
-        self.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest'] = forecast_planning_date
-
-    
-    def render_report(self, path):
-        with open(path) as fh:
-            content = fh.read()
-
-        display(Markdown(content))
-
-
-    def build_models_and_generate_forecast(self):
-        mandatory_params = self.mandatory_params['build_models_and_generate_forecast']
-        self.validate_params(mandatory_params)
-
-
-        self.setup_defaults()
-        self.param_search_config = self.train_config['search_space']
-        self.train_loss_config = self.train_config['training_loss_function']
-        self.eval_loss_config = self.train_config['loss_functions']
-        model_class = self.params['model_class']
-        
-        # Region params
-        region = self.params['region_name']
-        region_type = self.params['region_type']
-
-        # Train/test intervals
-        train1_start_date = self.params['time_interval_config.train_start_date']
-        train1_run_day = (datetime.strptime(train1_start_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y")
-        backtesting_split_date = self.params['time_interval_config.backtesting_split_date']
-        train1_end_date = (datetime.strptime(backtesting_split_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y")
-
-        test_run_day = (datetime.strptime(backtesting_split_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y")
-        test_start_date = backtesting_split_date
-        # Use the last date of the train interval as the test interval end date
-        test_end_date = self.params['time_interval_config.train_end_date']
-
-        train2_run_day = (datetime.strptime(backtesting_split_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y") 
-        train2_start_date = self.params['time_interval_config.backtesting_split_date']
-        train2_end_date = self.params['time_interval_config.train_end_date']
-
-        forecast_start_date = self.params['time_interval_config.forecast_start_date']
-        forecast_run_day = (datetime.strptime(forecast_start_date, "%m/%d/%y") - timedelta(1)).strftime("%-m/%-d/%y")
-        forecast_end_date = self.params['time_interval_config.forecast_end_date']
-
-        name_prefix = self.params['region_name']
-        output_dir = os.path.join('../outputs', self.params['output_dir'])
-
-        params, metrics, artifacts_dict, train1_params, train2_params = train_eval_plot_ensemble(region, region_type,
-            train1_run_day, train1_start_date, train1_end_date,
-            test_run_day, test_start_date, test_end_date,
-            train2_run_day, train2_start_date, train2_end_date,
-            forecast_run_day, forecast_start_date, forecast_end_date,
-            self.train_config, self.test_config, 
-            self.forecast_config, 
-            data_source=self.params['data_source'], 
-            input_filepath=self.params['data_filepath'], 
-            output_dir=output_dir, 
-            mlflow_log=False, 
-            mlflow_run_name=self.params['run_name'])
-
-
-        m1_model_params = train1_params['model_parameters']
-        m1_model = ModelFactory.get_model(model_class, m1_model_params)
-        m1_metrics_param_ranges = m1_model.get_statistics_of_params()
-        m2_model_params = train2_params['model_parameters']
-        m2_model = ModelFactory.get_model(model_class, m2_model_params)
-        m2_metrics_param_ranges = m2_model.get_statistics_of_params()
-
-        metrics['M1_param_ranges'] = m1_metrics_param_ranges
-        metrics['M2_param_ranges'] = m2_metrics_param_ranges
-
-        # Persist model parameters for generating planning reports
-        self.m2_model_params = m2_model_params
-
-        self.time_interval_config = params['time_interval_config']
-
-        model_building_report = os.path.join(output_dir, 'model_building_report.md')
-        create_report(params, metrics, artifacts_dict,
-                      template_path='publishers/model_building_template_v1.mustache',
-                      report_path=model_building_report)
-
-        self.params_to_log.update(params)
-        self.metrics_to_log.update(metrics)
-        self.artifacts_dict.update(artifacts_dict)
-
-        return params, metrics, train1_params, train2_params
-    
-    def generate_planning_plots(self, model_params, planning_variable, 
-                                planning_level, planning_date, 
-                                region_type, region_name, 
-                                data_source, input_filepath, 
-                                train2_start_date, train2_end_date, 
-                                forecast_run_day, forecast_start_date, 
-                                forecast_end_date):
-
-
-        params = dict()
-        metrics = dict()
-        artifacts_dict = dict()
-        r0 = model_params['r0']
-        params['uncertainty_config'] = self.forecast_config['model_parameters']['uncertainty_parameters']
-        params['region_type'] = region_type
-        params['region_name'] = region_name
-        params['forecast_planning_variable'] = planning_variable
-        params['forecast_planning_date'] = planning_date
-        params['scenario_config_R0_multipliers'] = self.params['rt_multiplier_list']
-        metrics['M2_planning_level_model'] = model_params
-        r0_list = [r*r0 for r in self.params['rt_multiplier_list']]
-        metrics['M2_whatif_scenarios_R0'] = r0_list
-        staffing_ratios_file_path = self.params['staff_ratios_file_path']
-
-
-        # Get staffing ratios
-        staff_ratios = get_clean_staffing_ratio(staffing_ratios_file_path)
-        bed_type_ratio = self.params['bed_type_ratio']
-        bed_multiplier_count = self.params['bed_multiplier_count']
-        metrics['staffing_planning'] = staff_ratios
-
-        with open('../config/sample_forecasting_config.json') as f:
-            forecast_config = json.load(f)
-
-        # Get actual and smoothed observations
-        df_actual = DataFetcherModule.get_observations_for_region(region_type, [region_name], 
-                                                                  data_source=data_source, 
-                                                                  smooth=False, filepath=input_filepath)
-        df_smoothed = DataFetcherModule.get_observations_for_region(region_type, [region_name], 
-                                                                    data_source=data_source, smooth=True, 
-                                                                    filepath=input_filepath)
-        plot_start_date_m2 = (datetime.strptime(train2_start_date, "%m/%d/%y") - timedelta(days=7)).strftime("%-m/%-d/%y")
-        df_actual_m2 = get_observations_subset(df_actual, plot_start_date_m2, train2_end_date)
-        df_smoothed_m2 = get_observations_subset(df_smoothed, plot_start_date_m2, train2_end_date)
-
-
-        rt_multiplier_list = [1] + self.params['rt_multiplier_list']    
-        for idx, r0_mult in enumerate(rt_multiplier_list):
-            percentile_config = deepcopy(forecast_config)
-            forecast_module = ForecastingModuleConfig.parse_obj(percentile_config)
-
-            # Fetch the model parameters and update it using the 
-            # multiplication factor
-            model_params['r0'] = model_params['r0'] * r0_mult
-            forecast_module.model_parameters = model_params
-
-            forecast_module.data_source = self.params['data_source']
-            forecast_module.input_filepath = self.params['data_filepath']
-            forecast_module.model_class = 'SEIHRD_gen'
-            forecast_module.run_day = forecast_run_day
-            forecast_module.forecast_start_date = forecast_start_date
-            forecast_module.forecast_end_date = forecast_end_date
-    
-            forecasting_output = ForecastingModule.from_config(forecast_module)
-            output_dir = self.params['output_dir']
-            artifact_name = 'forecast_' + str(planning_level) + '_' + str(r0_mult) + '.csv'
-            planning_outputs = os.path.join('../outputs', output_dir, 'planning_outputs')
-            artifact_path = os.path.join(planning_outputs, artifact_name)
-            forecasting_output.to_csv(artifact_path, index=False)
-
-            forecasting_output = forecasting_output.reset_index()
-
-            if idx >= 1:
-                active_count = float(forecasting_output[forecasting_output['date'] == planning_date]['active_mean'])
-                staffing_df = compute_staffing_matrix(active_count,bed_type_ratio,
-                                                      staffing_ratios_file_path,
-                                                      bed_multiplier_count)
-                metrics[f'staffing_scenario_{idx}'] = staffing_df
-
-
-            df_predictions_forecast_m2 = add_init_observations_to_predictions(df_actual, forecasting_output,
-                                                                  forecast_run_day)
-            df_predictions_forecast_m2['date'] = pd.to_datetime(df_predictions_forecast_m2['date'], format='%m/%d/%y')
-
-            if not os.path.exists(planning_outputs):
-                os.mkdir(planning_outputs)
-            m2_forecast_plots(region_name, df_actual_m2, df_smoothed_m2, df_predictions_forecast_m2,
-                              train2_start_date, forecast_start_date, column_tags=['mean'], output_dir=planning_outputs,
-                              debug=False, scenario=str(planning_level) + '_' + str(r0_mult))
-
-        
-        artifacts_dict = {
-            'plot_M2_planning_CARD': os.path.join(planning_outputs,f'{planning_level}_1_m2_forecast.png'),
-            'plot_M2_scenario_1_CARD': os.path.join(planning_outputs,f'{planning_level}_0.9_m2_forecast.png'),
-            'plot_M2_scenario_2_CARD': os.path.join(planning_outputs,f'{planning_level}_1.1_m2_forecast.png'),
-            'plot_M2_scenario_3_CARD': os.path.join(planning_outputs,f'{planning_level}_1.2_m2_forecast.png'),
-            'planning_output_forecast_file' : os.path.join(planning_outputs, f'forecast_{planning_level}_1.csv')
-        }
-
-        # self.artifacts_dict.update(artifacts_dict)
-
-        planning_report = os.path.join('../outputs', output_dir, 'planning_report.md')
-        create_report(params, metrics, artifacts_dict, 
-                      template_path='publishers/planning_template_v1.mustache', 
-                      report_path=planning_report)
-        planning_artifacts_list = list(artifacts_dict.values())
-        planning_artifacts_list.append(planning_report)
-        return planning_artifacts_list
-
-    
-    def generate_planning_outputs(self):
-        mandatory_params = self.mandatory_params['generate_planning_outputs']
-        self.validate_params(mandatory_params)
-        # Use scenario configs to generate planning outputs
-        pass
-    
-        #TODO: Check if we can get model params corresponding to a percentile level?
-        #Given the params correponding to the percentile level, enable a multiplier on
-        #r0 to generate a scenario forecast?
-
-        model_class = self.params['model_class']
-        model_params = self.m2_model_params
-        region_type = self.params['region_type']
-        region_name = self.params['region_name']
-        data_source = self.params['data_source']
-        input_filepath = self.params['data_filepath']
-        train2_start_date = self.time_interval_config['train2_start_date']
-        train2_end_date = self.time_interval_config['train2_end_date']
-        forecast_run_day = self.time_interval_config['forecast_run_day']
-        forecast_start_date = self.time_interval_config['forecast_start_date']
-        forecast_end_date = self.time_interval_config['forecast_end_date']
-        planning_level = self.params['planning_level']
-        planning_date = self.forecast_config['model_parameters']['uncertainty_parameters']['date_of_interest']
-
-        model = ModelFactory.get_model(model_class, model_params)
-
-        observations = DataFetcherModule.get_observations_for_region(region_type, [region_name], data_source=data_source, filepath=input_filepath)
-        region_metadata = DataFetcherModule.get_regional_metadata(region_type, [region_name], data_source=data_source)
-        planning_variable = 'confirmed' #self.params['planning_variable']
-        percentile_params = model.get_params_for_percentiles(column_of_interest = planning_variable, 
-                                 date_of_interest = planning_date, 
-                                 tolerance = 1, 
-                                 percentiles = [planning_level], 
-                                 region_metadata = region_metadata, 
-                                 region_observations= observations,
-                                 run_day = forecast_run_day, 
-                                 start_date = forecast_start_date, 
-                                 end_date = forecast_end_date)
-
-        planning_model_params = percentile_params[planning_level]
-
-        planning_artifact_list = self.generate_planning_plots(planning_model_params, planning_variable, 
-                                                              planning_level, planning_date,
-                                                              region_type, region_name, 
-                                                              data_source, input_filepath, 
-                                                              train2_start_date, train2_end_date, 
-                                                              forecast_run_day, forecast_start_date, forecast_end_date)
-
-        return planning_artifact_list
-    
-    def list_outputs(self):
-        mandatory_params = self.mandatory_params['list_outputs']
-        self.validate_params(mandatory_params)
-        csv_fname = self.params['case_cnt_csv_file_name']
-        plot_fname = self.params['case_cnt_plot_file_name']
-        plt.show(plot_fname)
-        return pd.read_csv(csv_fname)
-    
-    def log_session(self):
-        # TODO: Log comments and questions
-        mandatory_params = self.mandatory_params['log_session']
-        self.validate_params(mandatory_params)
-
-        try:
-            self.params_to_log['train_loss_function_config'] = \
-                flatten_train_loss_config(self.params_to_log['train_loss_function_config'])
-        except KeyError:
+            # TODO: exception handling later
+            print("Unknown model operation")
             pass
-        try:
-            self.params_to_log['eval_loss_function_config'] = \
-                flatten_eval_loss_config(self.params_to_log['eval_loss_function_config'])
-        except KeyError:
+
+        # create the correct type of configuration
+        if operation in ["M1_train", "M2_train"]:
+            cfg = TrainingModuleConfig.parse_obj(cfg)
+        elif operation in ["M1_test"]:
+            cfg = ModelEvaluatorConfig.parse_obj(cfg)
+        elif operation in ["forecast"]:
+            cfg = ForecastingModuleConfig.parse_obj(cfg)
+        else:
+            # TODO: exception handling later
+            print("Unknown model operation")
             pass
-        self.params_to_log = flatten(self.params_to_log)
-        self.metrics_to_log = flatten(self.metrics_to_log)
 
-        remove_keys = []
-        for key, value in self.metrics_to_log.items():
-            if isinstance(value, pd.DataFrame):  # TODO: Check for numeric type
-                remove_keys.append(key)
+        return cfg
 
-        [self.metrics_to_log.pop(key) for key in remove_keys]
+    @staticmethod
+    def create_session(session_name, user_name='guest'):
+        """
 
-        log_to_mlflow(self.params_to_log, self.metrics_to_log, self.artifacts_dict,
-                      experiment_name=self.params['experiment_name'], run_name=self.params['run_name'])
+        Args:
+            session_name (str):
+            user_name (str):
 
+        Returns:
+
+        """
+        # NOTE:
+        # if we were going to need to inherit from this ModelBuildingSession class, we should make this as classmethod
+        current_session = ModelBuildingSession(session_name, user_name)
+
+        msg = (
+            f'**********************\n'
+            f'Created session: {current_session.params.session_name}\n'
+            f'User: {current_session.params.user_name}\n'
+            f'Output stored in the directory: {current_session.params.output_dir}\n'
+            f'**********************\n'
+        )
+        print(msg)
+        return current_session
+
+    @staticmethod
+    def view_forecasts_static(experiment_name, region_name, interval_to_consider):
+        """
+
+        Args:
+            experiment_name (str):
+            region_name (str):
+            interval_to_consider (int):
+
+        Returns:
+
+        """
+        outputs = {}
+        outputs['links_df'] = mlflow_logger.get_previous_runs(experiment_name, region_name, interval_to_consider)
+        return outputs
+
+    @staticmethod
+    def examine_data_static(region_name, region_type, data_source, input_file_path, output_artifacts):
+        """
+
+        Args:
+            region_name (list):
+            region_type (str):
+            data_source (DataSource):
+            input_file_path (str):
+            output_artifacts (ModelBuildingSessionOutputArtifacts):
+
+        Returns:
+
+        """
+        outputs = {}
+        actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
+                                                               filepath=input_file_path, smooth=False, simple=True)
+
+        write_file(actual, output_artifacts.cleaned_case_count_file, "csv", "dataframe")
+        multivariate_case_count_plot(actual, column_label='', column_tag='', title=region_name,
+                                     path=output_artifacts.plot_case_count)
+        return outputs
+
+    @staticmethod
+    def build_models_and_generate_forecast_static(verbose, region_name, region_type, data_source, input_filepath,
+                                                  time_interval_config, model_class, model_parameters,
+                                                  train_loss_function, search_space, search_parameters,
+                                                  eval_loss_functions, uncertainty_parameters, output_artifacts,
+                                                  output_dir):
+        """
+
+        Args:
+            verbose (bool):
+            region_name (list):
+            region_type (str):
+            data_source (DataSource):
+            input_filepath (str):
+            time_interval_config (dict):
+            model_class (str):
+            model_parameters (dict):
+            train_loss_function (dict):
+            search_space (dict):
+            search_parameters (dict):
+            eval_loss_functions (list):
+            uncertainty_parameters (dict):
+            output_artifacts (ModelBuildingSessionOutputArtifacts):
+            output_dir (str):
+
+        Returns:
+
+        """
+        outputs = {}
+        metrics = ModelBuildingSession.train_eval_static(region_name, region_type, data_source, input_filepath,
+                                                         time_interval_config, model_class, model_parameters,
+                                                         train_loss_function, search_space, search_parameters,
+                                                         eval_loss_functions, uncertainty_parameters, output_artifacts,
+                                                         output_dir)
+
+        ModelBuildingSession.forecast_and_plot_static(region_name, region_type, data_source, input_filepath,
+                                                      time_interval_config, model_class, model_parameters,
+                                                      uncertainty_parameters, output_artifacts, output_dir, verbose)
+
+        outputs['metrics'] = metrics
+        return outputs
+
+    @staticmethod
+    def train_eval_static(region_name, region_type, data_source, input_filepath, time_interval_config, model_class,
+                          model_parameters, train_loss_function, search_space, search_parameters, eval_loss_functions,
+                          uncertainty_parameters, output_artifacts, output_dir):
+        """
+
+        Args:
+            region_name (list):
+            region_type (str):
+            data_source (DataSource):
+            input_filepath (str):
+            time_interval_config (dict):
+            model_class (str):
+            model_parameters (dict):
+            train_loss_function (dict):
+            search_space (dict):
+            search_parameters (dict):
+            eval_loss_functions (list):
+            uncertainty_parameters (dict):
+            output_artifacts (ModelBuildingSessionOutputArtifacts):
+            output_dir (str):
+
+        Returns:
+
+        """
+        metrics = {}
+
+        # 1.  M1 train step
+
+        # generate the config
+        M1_train_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
+                                                                                 input_filepath, time_interval_config,
+                                                                                 model_class, model_parameters,
+                                                                                 train_loss_function, search_space,
+                                                                                 search_parameters, eval_loss_functions,
+                                                                                 uncertainty_parameters,
+                                                                                 None, "M1_train", output_dir)
+        # run the training
+        M1_train_results = TrainingModule.from_config(deepcopy(M1_train_config))
+        # collect all the outputs
+
+        # Save beta_trials, param_ranges, percentile_params, model_params, metric results
+        write_file(to_dict(M1_train_results['model']), output_artifacts.M1_model, "json", "dict")
+        write_file(M1_train_results['model_parameters'], output_artifacts.M1_model_params, "json", "dict")
+        write_file(M1_train_results['trials'], output_artifacts.M1_beta_trials, "json", "dict")
+        write_file(M1_train_results['param_ranges'], output_artifacts.M1_param_ranges, "csv", "dataframe")
+        metrics['M1_beta'] = M1_train_results['model_parameters']['beta']
+        metrics_M1_train_losses = loss_to_dataframe(M1_train_results['train_metric_results'], 'train1')
+
+        # 2.  M1 test step
+
+        # generate the config
+        M1_test_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
+                                                                                input_filepath, time_interval_config,
+                                                                                model_class, model_parameters,
+                                                                                train_loss_function, search_space,
+                                                                                search_parameters, eval_loss_functions,
+                                                                                uncertainty_parameters,
+                                                                                output_artifacts.M1_model_params,
+                                                                                "M1_test", output_dir)
+        # run the evaluation
+        M1_test_results = ModelEvaluator.from_config(deepcopy(M1_test_config))
+
+        # collect all the outputs
+        metrics_M1_test_losses = loss_to_dataframe(M1_test_results, 'test1')
+        metrics['M1_losses'] = pd.concat([metrics_M1_train_losses, metrics_M1_test_losses], axis=0)
+
+        # 3. M2 train step
+
+        # generate the config
+        M2_train_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
+                                                                                 input_filepath, time_interval_config,
+                                                                                 model_class, model_parameters,
+                                                                                 train_loss_function, search_space,
+                                                                                 search_parameters, eval_loss_functions,
+                                                                                 uncertainty_parameters,
+                                                                                 None, "M2_train", output_dir)
+        # run the training
+        M2_train_results = TrainingModule.from_config(deepcopy(M2_train_config))
+
+        # TODO: what about percentile params - did we need to put uncertainty parameters in M2_train_config as well ?
+        # collect all the outputs
+        write_file(to_dict(M2_train_results['model']), output_artifacts.M2_model, "json", "dict")
+        write_file(M2_train_results['model_parameters'], output_artifacts.M2_model_params, "json", "dict")
+        write_file(M2_train_results['trials'], output_artifacts.M2_beta_trials, "json", "dict")
+        write_file(M2_train_results['param_ranges'], output_artifacts.M2_param_ranges, "csv", "dataframe")
+        write_file(M2_train_results['percentile_parameters'], output_artifacts.M2_percentile_params, "csv", "dataframe")
+        metrics['M2_beta'] = M2_train_results['model_parameters']['beta']
+        metrics['M2_losses'] = loss_to_dataframe(M2_train_results['train_metric_results'], 'train2')
+
+        # write out configs
+        write_file(to_dict(M1_train_config), output_artifacts.M1_train_config, "json", "dict", indent=4)
+        write_file(to_dict(M1_test_config), output_artifacts.M1_test_config, "json", "dict", indent=4)
+        write_file(to_dict(M2_train_config), output_artifacts.M2_train_config, "json", "dict", indent=4)
+
+        return metrics
+
+    @staticmethod
+    def forecast_and_plot_static(region_name, region_type, data_source, input_filepath, time_interval_config,
+                                 model_class, model_parameters, uncertainty_parameters, output_artifacts, output_dir,
+                                 verbose=True):
+        """
+
+        Args:
+            region_name (list):
+            region_type (str):
+            data_source (DataSource):
+            input_filepath (str):
+            time_interval_config (dict):
+            model_class (ModelClass):
+            model_parameters (dict):
+            uncertainty_parameters (dict):
+            output_artifacts (ModelBuildingSessionOutputArtifacts):
+            output_dir (str):
+            verbose (bool):
+
+        Returns:
+
+        """
+        # Get all dates of interest
+        dates = time_interval_config['direct']
+        forecast_end_date = dates['forecast_end_date']
+        forecast_run_day = dates['forecast_run_day']
+        forecast_start_date = dates['forecast_start_date']
+        test_end_date = dates['test_end_date']
+        test_run_day = dates['test_run_day']
+        test_start_date = dates['test_start_date']
+        train1_end_date = dates['train1_end_date']
+        train1_run_day = dates['train1_run_day']
+        train1_start_date = dates['train1_start_date']
+        train2_end_date = dates['train2_end_date']
+        train2_run_day = dates['train2_run_day']
+        train2_start_date = dates['train2_start_date']
+        plot_start_date_m1 = dates['plot_start_date_m1']
+        plot_start_date_m2 = dates['plot_start_date_m2']
+
+        # Get all the models of interest
+        M1_model_params = read_file(output_artifacts.M1_model_params, 'json', 'dict')
+        M2_model_params = read_file(output_artifacts.M2_model_params, 'json', 'dict')
+
+        # Get a reusable forecast config
+        # TODO: Forecasting module requires dates and model params to be set when initializing
+        forecast_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
+                                                                                 input_filepath, time_interval_config,
+                                                                                 model_class, None, None, None, None,
+                                                                                 None, None,
+                                                                                 output_artifacts.M1_model_params,
+                                                                                 "forecast", output_dir)
+
+        # Get actual and smoothed observations in correct ranges
+        df_m1 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath)
+        df_m2 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath)
+
+        # M1 train
+        if verbose:
+            df_predictions_train_m1 = ForecastingModule.flexible_forecast(df_m1["actual"], M1_model_params,
+                                                                          train1_run_day,
+                                                                          train1_start_date, forecast_end_date,
+                                                                          train1_end_date, forecast_config,
+                                                                          with_uncertainty=True,
+                                                                          include_best_fit=True)
+        else:
+            df_predictions_train_m1 = ForecastingModule.flexible_forecast(df_m1["actual"], M1_model_params,
+                                                                          train1_run_day,
+                                                                          train1_start_date, train1_end_date,
+                                                                          train1_end_date, forecast_config)
+        # M1 test
+        df_predictions_test_m1 = ForecastingModule.flexible_forecast(df_m1["actual"], M1_model_params, test_run_day,
+                                                                     test_start_date,
+                                                                     forecast_end_date,
+                                                                     test_end_date, forecast_config,
+                                                                     with_uncertainty=True,
+                                                                     include_best_fit=True)
+
+        # Get predictions for M2 train and forecast intervals
+
+        # M2 train
+        if verbose:
+            df_predictions_train_m2 = ForecastingModule.flexible_forecast(df_m2["actual"], M2_model_params,
+                                                                          train2_run_day,
+                                                                          train2_start_date, forecast_end_date,
+                                                                          train2_end_date, forecast_config,
+                                                                          with_uncertainty=True,
+                                                                          include_best_fit=True)
+        else:
+            df_predictions_train_m2 = ForecastingModule.flexible_forecast(df_m2["actual"], M2_model_params,
+                                                                          train2_run_day,
+                                                                          train2_start_date, train2_end_date,
+                                                                          train2_end_date, forecast_config)
+
+        # M2 forecast
+        df_predictions_forecast_m2 = ForecastingModule.flexible_forecast(df_m2["actual"], M2_model_params,
+                                                                         forecast_run_day,
+                                                                         forecast_start_date,
+                                                                         forecast_end_date, forecast_end_date,
+                                                                         forecast_config, with_uncertainty=True,
+                                                                         include_best_fit=True)
+
+        write_file(to_dict(forecast_config), output_artifacts.M2_forecast_config, "json", "dict", indent=4)
+
+        write_file(df_predictions_forecast_m2, output_artifacts.M2_full_output_forecast_file, "csv", "dataframe")
+
+        # Get percentiles to be plotted
+        uncertainty_parameters = forecast_config.model_parameters['uncertainty_parameters']
+        confidence_intervals = []
+        for c in uncertainty_parameters['confidence_interval_sizes']:
+            confidence_intervals.extend([50 - c / 2, 50 + c / 2])
+        percentiles = list(set(uncertainty_parameters['percentiles'] + confidence_intervals))
+        column_tags = [str(i) for i in percentiles]
+        column_tags.extend(['mean', 'best'])
+        region_name_str = " ".join(region_name) if isinstance(region_name, list) else region_name
+
+        df_m1_plot, df_m2_plot = dict(), dict()
+        df_m1_plot['actual'] = get_observations_subset(df_m1['actual'], plot_start_date_m1, test_end_date)
+        df_m1_plot['smoothed'] = get_observations_subset(df_m1['smoothed'], plot_start_date_m1, test_end_date)
+        df_m2_plot['actual'] = get_observations_subset(df_m2['actual'], plot_start_date_m2, train2_end_date)
+        df_m2_plot['smoothed'] = get_observations_subset(df_m2['smoothed'], plot_start_date_m1, train2_end_date)
+
+        # Create M1, M2, M2 forecast plots
+        m1_plots(region_name_str, df_m1_plot["actual"], df_m1_plot["smoothed"], df_predictions_train_m1,
+                 df_predictions_test_m1, train1_start_date, test_start_date, output_artifacts.dict(),
+                 column_tags=column_tags, verbose=verbose)
+        m2_plots(region_name_str, df_m2_plot["actual"], df_m2_plot["smoothed"], df_predictions_train_m2,
+                 train2_start_date, output_artifacts.dict(),
+                 column_tags=column_tags, verbose=verbose)
+        m2_forecast_plots(region_name_str, df_m2_plot["actual"], df_m2_plot["smoothed"], df_predictions_forecast_m2,
+                          train2_start_date, forecast_start_date, output_artifacts.dict(),
+                          column_tags=column_tags, verbose=False)
+
+        # Get trials dataframe
+        region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source=data_source)
+        M2_model = ModelFactory.get_model(model_class, M2_model_params)
+        # TODO: LATER - Round2 refactoring
+        trials = M2_model.get_trials_distribution(region_metadata, df_m2["actual"], forecast_run_day,
+                                                  forecast_start_date, forecast_end_date)
+        # Plot PDF and CDF
+        distribution_plots(trials, uncertainty_parameters['variable_of_interest'], output_artifacts.dict())
+
+    @staticmethod
+    def generate_planning_outputs_static(region_name, region_type, data_source, input_file_path,
+                                         time_interval_config, model_class, uncertainty_parameters, planning,
+                                         staffing, model_file, output_artifacts, output_dir):
+        """
+
+        Args:
+            region_name (list):
+            region_type (str):
+            data_source (DataSource):
+            input_filepath (str):
+            time_interval_config (dict):
+            model_class (ModelClass):
+            uncertainty_parameters (dict):
+            planning (dict):
+            staffing (dict):
+            model_file (str):
+            output_artifacts (ModelBuildingSessionOutputArtifacts):
+            output_dir (str):
+
+        Returns:
+
+        """
+        outputs = {}
+
+        # 1. read the ensemble model file
+        M2_model_params = read_file(model_file, "json", "dict")
+        M2_model = ModelFactory.get_model(model_class, M2_model_params)
+
+        dates = time_interval_config['direct']
+
+        # 2. get the relevant data
+        regional_data = DataFetcherModule.get_regional_data(region_type, [region_name], data_source=data_source,
+                                                            input_filepath=input_file_path)
+
+        # 3. get the representative model for the chosen planning level
+        percentile_params = M2_model.get_params_for_percentiles(
+            variable_of_interest=uncertainty_parameters['variable_of_interest'],
+            date_of_interest=uncertainty_parameters['date_of_interest'],
+            tolerance=uncertainty_parameters['tolerance'], percentiles=[planning['ref_level']],
+            region_metadata=regional_data['metadata'], region_observations=regional_data['actual'],
+            run_day=dates['forecast_run_day'], start_date=dates['forecast_start_date'],
+            end_date=dates['forecast_end_date'])
+
+        M2_planning_model_params = percentile_params[planning['ref_level']]
+        write_file(M2_planning_model_params, output_artifacts.M2_planning_model_params, "json", "dict")
+
+        # 4. generate the required forecast config for the child models
+        child_model_class = M2_model.child_model_class
+        m2_child_forecast_config = ModelBuildingSession._generate_model_operations_config(
+            region_name, region_type, data_source, input_file_path, time_interval_config, child_model_class,
+            None, None, None, None, None, None, output_artifacts.M2_planning_model_params, "forecast", output_dir)
+
+        # 5. compute the parameters (just r0) for the different scenarios including the planning one
+        rt_multiplier_list = [1]
+        rt_multiplier_list.extend(planning['rt_multiplier_list'])
+        rt_list = [r * M2_planning_model_params['r0'] for r in rt_multiplier_list]
+        metrics = {"M2_scenarios_r0": rt_list}
+
+        # 6. loop through the different cases
+        # TODO: LATER V3 generalize this piece for handling more complex scenarios - later V3
+        forecasting_output = pd.DataFrame()
+        for i in range(len(rt_list)):
+
+            #  choose the names for each case - for artifact files
+            if i == 0:
+                case_name = "planning"
+            else:
+                case_name = "scenario_" + str(i)
+
+            #  set the model params correctly
+            m2_child_forecast_config.model_parameters["r0"] = rt_list[i]
+
+            #  compute the case count forecast
+            df_m2 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source,
+                                                                   input_file_path)
+
+            forecast_m2 = ForecastingModule.flexible_forecast(df_m2["actual"], M2_planning_model_params,
+                                                              dates["forecast_run_day"], dates["forecast_start_date"],
+                                                              dates["forecast_end_date"], dates["forecast_end_date"],
+                                                              m2_child_forecast_config)
+
+            #  compute and save the case count forecast
+            forecasting_output = ForecastingModule.from_config(m2_child_forecast_config)
+            forecasting_output.to_csv(output_artifacts.__getattribute__(f'staffing_{case_name}'), index=False)
+
+            # compute and save the staffing matrices
+            active_count = float(
+                forecasting_output[forecasting_output.index == uncertainty_parameters['date_of_interest']][
+                    'active_mean'])
+            staffing_df = domain_info.compute_staffing_matrix(active_count, staffing['bed_type_ratio'],
+                                                              staffing['staffing_ratios_file'],
+                                                              staffing['bed_multiplier_count'])
+            staff_matrix_file_key = "staffing_" + case_name
+            staffing_df.to_csv(output_artifacts.__getattribute__(staff_matrix_file_key), index=False)
+
+            vertical_lines = [
+                {'date': dates["train2_start_date"], 'color': 'brown', 'label': 'Train starts'},
+                {'date': dates["forecast_start_date"], 'color': 'black', 'label': 'Forecast starts'}
+            ]
+            df_m2_plot = dict()
+            df_m2_plot['actual'] = get_observations_subset(df_m2['actual'], dates["plot_start_date_m2"],
+                                                           dates["train2_end_date"])
+            df_m2_plot['smoothed'] = get_observations_subset(df_m2['smoothed'], dates["plot_start_date_m2"],
+                                                             dates["train2_end_date"])
+
+            multivariate_case_count_plot(df_m2_plot["actual"], df_m2_plot["smoothed"], df_predictions_train=None,
+                                         df_predictions_test=forecast_m2, vertical_lines=vertical_lines,
+                                         title=f'{region_name}: Scenario {case_name} - M2 forecast',
+                                         path=output_artifacts.__getattribute__(f'plot_M2_{case_name}_CARD'))
+
+            forecasting_output = pd.concat([forecasting_output, forecast_m2], axis=1)
+
+        write_file(forecasting_output, output_artifacts.M2_planning_output_forecast_file, "csv", "dataframe")
+
+        outputs['metrics'] = metrics
+        return outputs
+
+    @staticmethod
+    def list_outputs_static(output_artifacts, display_list=['model_building_report', 'planning_report']):
+        """
+
+        Args:
+            output_artifacts (ModelBuildingSessionOutputArtifacts):
+            display_list (list):
+
+        Returns:
+
+        """
+        outputs = {}
+        print('Listing all the output artifacts from the session:\n')
+        for key, value in output_artifacts.__fields__.items():
+            print(key + ': ' + value.name + '\n')
+
+        for a in display_list:
+            render_artifact(output_artifacts.__getattribute__(a), ".md")
+        return outputs
+
+    @staticmethod
+    def log_session_static(params, metrics, output_artifacts, experiment_name, session_name):
+        """
+
+        Args:
+            params (ModelBuildingSessionParams):
+            metrics (ModelBuildingSessionMetrics):
+            output_artifacts (ModelBuildingSessionOutputArtifacts):
+            experiment_name (str):
+            session_name (str):
+
+        Returns:
+
+        """
+        input_artifacts = {input_artifact.split(".")[-1]: get_dict_field(params.dict(), input_artifact.split(".")) for
+                           input_artifact in params.input_artifacts}
+        output_artifacts_to_log = output_artifacts.dict()
+        output_artifacts_to_log.update(input_artifacts)
+        outputs = mlflow_logger.log_to_mlflow(params, metrics, output_artifacts_to_log,
+                                              experiment_name=experiment_name, run_name=session_name)
+        return outputs
