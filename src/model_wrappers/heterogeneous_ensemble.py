@@ -9,7 +9,7 @@ from entities.loss_function import LossFunction
 from hyperopt import hp
 from model_wrappers import model_factory as model_factory_alias
 from model_wrappers.base import ModelWrapperBase
-from utils.data_util import flatten
+from utils.data_util import flatten, to_dict
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
 from utils.hyperparam_util import hyperparam_tuning
 from utils.metrics_util import evaluate_for_forecast
@@ -131,8 +131,9 @@ class HeterogeneousEnsemble(ModelWrapperBase):
                                                          train_start_date, date_of_interest)
             new_dict = dict()
             for k, i in param_dict.items():
-                new_dict[str(k) + ' percentile'] = flatten(i)
-            param_df = pd.DataFrame.from_dict(new_dict)
+                new_dict[str(k) + ' percentile'] = flatten(to_dict(i))
+            param_df = pd.DataFrame.from_dict(new_dict).reset_index().rename(columns={"index": "parameter"})
+            param_df = param_df.applymap(lambda x: round(x, 5) if isinstance(x, (int, float)) else x)
         else:
             param_df = pd.DataFrame()
 

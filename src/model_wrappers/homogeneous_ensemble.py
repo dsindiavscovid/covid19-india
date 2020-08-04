@@ -142,9 +142,9 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         mean = dict()
         mini = dict()
         maxi = dict()
-        mean['statName'] = append_str + "Mean"
-        mini['statName'] = append_str + "Min"
-        maxi['statName'] = append_str + "Max"
+        mean['statName'] = append_str + "mean"
+        mini['statName'] = append_str + "min"
+        maxi['statName'] = append_str + "max"
         for key in keys:
             if (isinstance(list_of_params[list_of_indexes[0]][key], float)
                     or isinstance(list_of_params[list_of_indexes[0]][key], int)):
@@ -168,9 +168,8 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
 
         if output_file_location is not None:
             stats_df.to_csv(output_file_location)
-        stats_df = stats_df.set_index('statName')
-        stats_df.index.name = ''
-        return stats_df.transpose()
+        stats_df = stats_df.set_index('statName').T.reset_index().rename(columns={"index": "parameter"}).round(5)
+        return stats_df
 
     def predict_from_mean_param(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str,
                                 start_date: str,

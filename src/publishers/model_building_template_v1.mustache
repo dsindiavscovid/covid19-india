@@ -31,7 +31,6 @@ Evaluation Loss Function:
 ```yaml
 {{params_eval_loss_functions}}
 ```
-Forecast Percentiles: {{params_uncertainty_parameters_percentiles}}
 
 ## Training and Evaluation - Model M1 Results
 
@@ -99,8 +98,10 @@ Forecasts:
 
 ## Planning  Forecast
 
-* Planning Variable:  {{params_uncertainty_parameters_variable_of_interest}}
-* Planning Date:  {{params_uncertainty_parameters_date_of_interest}}
+* Planning Uncertainty Config:
+```yaml
+{{params_uncertainty_parameters}}
+```
 
 ![Planning Date Forecast Distribution ]({{artifact_list_plot_planning_pdf_cdf}})
 

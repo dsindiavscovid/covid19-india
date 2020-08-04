@@ -83,6 +83,8 @@ def evaluate_for_forecast(observations, predictions_df, loss_functions: List[Los
 
 def loss_to_dataframe(loss_dict, name):
     loss_dict = to_dict(loss_dict)
+    for loss in loss_dict:
+        loss['weights'] = list(loss['weights'].values())[0]
     loss_df = pd.DataFrame(loss_dict)
     loss_df.insert(0, column='', value=name)
     return loss_df

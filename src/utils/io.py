@@ -25,7 +25,6 @@ def write_file(data, file_path, file_format, data_format, **kwargs):
             data.to_csv(file_path, index=False)
         else:
             data.to_csv(file_path, **kwargs)
-
     else:
         pass
     return

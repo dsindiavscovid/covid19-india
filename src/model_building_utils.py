@@ -61,14 +61,14 @@ class ModelBuildingSession(BaseModel):
         # set up session_name
         self._set_session_name(session_name, user_name)
 
-        # set up logging
-        logging.basicConfig(filename=self.output_artifacts.session_log)
-
         # set up the permissions for mlflow and data pipeline
         ModelBuildingSession._init_mlflow_datapipeline_config()
 
         # create output folder
         create_output_folder(self.params.session_name + '_outputs', ModelBuildingSession._DEFAULT_ROOT_DIR)
+
+        # set up logging
+        logging.basicConfig(filename=self.output_artifacts.session_log)
 
     def _set_session_name(self, session_name, user_name):
         """
@@ -219,7 +219,7 @@ class ModelBuildingSession(BaseModel):
         self._validate_params_for_function('build_models_and_generate_forecast')
         sp = self.params
         sp.time_interval_config = ModelBuildingSession._compute_dates(sp.time_interval_config)
-        outputs = ModelBuildingSession.build_models_and_generate_forecast_static(True, sp.region_name, sp.region_type,
+        outputs = ModelBuildingSession.build_models_and_generate_forecast_static(sp.region_name, sp.region_type,
                                                                                  sp.data_source, sp.input_file_path,
                                                                                  sp.time_interval_config,
                                                                                  sp.model_class, sp.model_parameters,
@@ -227,15 +227,15 @@ class ModelBuildingSession(BaseModel):
                                                                                  sp.search_space, sp.search_parameters,
                                                                                  sp.eval_loss_functions,
                                                                                  sp.uncertainty_parameters,
-                                                                                 self.output_artifacts, sp.output_dir)
+                                                                                 self.output_artifacts, sp.output_dir,
+                                                                                 True)
 
         for metric, value in outputs['metrics'].items():
             self.metrics.__setattr__(metric, value)
 
-        print(self.metrics.dict())
-
         # creating report outside of the static_method to keep it simple
         reporting.create_report(self.params, self.metrics, self.output_artifacts,
+                                artifacts_to_render=self.params.artifacts_to_render,
                                 template_path=ModelBuildingSession._DEFAULT_MODEL_BUILDING_REPORT_TEMPLATE,
                                 report_path=self.output_artifacts.model_building_report)
 
@@ -519,11 +519,11 @@ class ModelBuildingSession(BaseModel):
         return outputs
 
     @staticmethod
-    def build_models_and_generate_forecast_static(verbose, region_name, region_type, data_source, input_filepath,
+    def build_models_and_generate_forecast_static(region_name, region_type, data_source, input_filepath,
                                                   time_interval_config, model_class, model_parameters,
                                                   train_loss_function, search_space, search_parameters,
                                                   eval_loss_functions, uncertainty_parameters, output_artifacts,
-                                                  output_dir):
+                                                  output_dir, verbose):
         """
 
         Args:
@@ -776,7 +776,7 @@ class ModelBuildingSession(BaseModel):
         df_m1_plot['actual'] = get_observations_subset(df_m1['actual'], plot_start_date_m1, test_end_date)
         df_m1_plot['smoothed'] = get_observations_subset(df_m1['smoothed'], plot_start_date_m1, test_end_date)
         df_m2_plot['actual'] = get_observations_subset(df_m2['actual'], plot_start_date_m2, train2_end_date)
-        df_m2_plot['smoothed'] = get_observations_subset(df_m2['smoothed'], plot_start_date_m1, train2_end_date)
+        df_m2_plot['smoothed'] = get_observations_subset(df_m2['smoothed'], plot_start_date_m2, train2_end_date)
 
         # Create M1, M2, M2 forecast plots
         m1_plots(region_name_str, df_m1_plot["actual"], df_m1_plot["smoothed"], df_predictions_train_m1,
@@ -792,7 +792,7 @@ class ModelBuildingSession(BaseModel):
         # Get trials dataframe
         region_metadata = DataFetcherModule.get_regional_metadata(region_type, region_name, data_source=data_source)
         M2_model = ModelFactory.get_model(model_class, M2_model_params)
-        # TODO: LATER - Round2 refactoring
+        # TODO: LATER - Round 2 refactoring
         trials = M2_model.get_trials_distribution(region_metadata, df_m2["actual"], forecast_run_day,
                                                   forecast_start_date, forecast_end_date)
         # Plot PDF and CDF

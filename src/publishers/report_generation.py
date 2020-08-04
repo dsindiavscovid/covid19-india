@@ -1,18 +1,35 @@
 import pprint
 
 import chevron
+import pypandoc
 import pandas as pd
 from configs.model_building_session_config import ModelBuildingSessionParams, ModelBuildingSessionMetrics, \
     ModelBuildingSessionOutputArtifacts
+from utils.io import read_file
 
 
-def create_report(params, metrics, artifact_dict, template_path='template.mustache', report_path='report.md'):
+def create_report(params, metrics, artifact_dict, artifacts_to_render=None, template_path='template.mustache', report_path='report.md'):
+    """Generates a report from a template
+
+    Args:
+        params ():
+        metrics ():
+        artifact_dict ():
+        artifacts_to_render(dict(str, dict(str, str))):
+        template_path (str): path to template file
+        report_path (str): path to report generated
+
+    """
     if isinstance(params, ModelBuildingSessionParams):
         params = params.dict()
     if isinstance(metrics, ModelBuildingSessionMetrics):
         metrics = metrics.dict()
     if isinstance(artifact_dict, ModelBuildingSessionOutputArtifacts):
         artifact_dict = artifact_dict.dict()
+
+    if artifacts_to_render is not None:
+        for artifact, read_args in artifacts_to_render.items():
+            artifact_dict[artifact] = read_file(artifact_dict[artifact], **read_args)
 
     params = {'_'.join(['params', k]): v for k, v in params.items()}
     metrics = {'_'.join(['metrics', k]): v for k, v in metrics.items()}

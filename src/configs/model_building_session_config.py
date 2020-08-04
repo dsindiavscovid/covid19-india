@@ -87,6 +87,7 @@ class ModelBuildingSessionParams(BaseModel):
     publish_flag: bool = True
     comments: str = ''
     input_artifacts: List
+    artifacts_to_render: dict = None
 
 
 class ModelBuildingSessionMetrics(BaseModel):

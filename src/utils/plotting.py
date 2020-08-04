@@ -34,7 +34,7 @@ def plot_format(ax):
     """
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
     ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
 
 
 def plot_vertical_lines(ax, vertical_lines):
@@ -52,7 +52,7 @@ def plot_vertical_lines(ax, vertical_lines):
 
 
 def multivariate_case_count_plot(df_actual, df_smoothed=None, df_predictions_train=None, df_predictions_test=None,
-                                 variables=None, column_label='Predicted mean', column_tag='mean', vertical_lines=None,
+                                 variables=None, column_label='mean', column_tag='mean', vertical_lines=None,
                                  title='', path=None):
     """Creates a plot of one or more variables and types of data
 
@@ -99,7 +99,6 @@ def multivariate_case_count_plot(df_actual, df_smoothed=None, df_predictions_tra
     plt.title(title)
     plt.ylabel('Case counts')
     plt.xlabel('Time')
-    plt.xticks(rotation=45)
     handles, labels = plt.gca().get_legend_handles_labels()
     legend_dict = dict(zip(labels, handles))
     plt.legend(legend_dict.values(), legend_dict.keys())
@@ -146,20 +145,20 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
                 column = '_'.join([variable, tag])
                 if column in df_predictions_train.columns:
                     if tag == 'mean':
-                        plt.plot(df_predictions_train['date'], df_predictions_train[column], 'x',
+                        plt.plot(df_predictions_train['date'], df_predictions_train[column], '--',
                                  color='black', label='Predicted mean')
                     elif tag == 'best':
                         plt.plot(df_predictions_train['date'], df_predictions_train[column], '-.',
                                  color='black', label='Predicted best fit')
                     else:
-                        plt.plot(df_predictions_train['date'], df_predictions_train[column], '--',
+                        plt.plot(df_predictions_train['date'], df_predictions_train[column], ':',
                                  color=plot_colors[variable], label=f'Predicted percentiles')
                     percentile_labels.append(plt.text(
                         x=df_predictions_train['date'].iloc[-1],
                         y=df_predictions_train[column].iloc[-1], s=tag))
     else:
         if df_predictions_train is not None:
-            plt.plot(df_predictions_train['date'], df_predictions_train[f'{variable}_mean'], 'x',
+            plt.plot(df_predictions_train['date'], df_predictions_train[f'{variable}_mean'], '--',
                      color='black', label='Predicted mean')
 
     if df_predictions_test is not None and column_tags is not None:
@@ -167,13 +166,13 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
             column = '_'.join([variable, tag])
             if column in df_predictions_test.columns:
                 if tag == 'mean':
-                    plt.plot(df_predictions_test['date'], df_predictions_test[column], 'x',
+                    plt.plot(df_predictions_test['date'], df_predictions_test[column], '--',
                              color='black', label='Predicted mean')
                 elif tag == 'best':
                     plt.plot(df_predictions_test['date'], df_predictions_test[column], '-.',
                              color='black', label='Predicted best fit')
                 else:
-                    plt.plot(df_predictions_test['date'], df_predictions_test[column], '--',
+                    plt.plot(df_predictions_test['date'], df_predictions_test[column], ':',
                              color=plot_colors[variable], label=f'Predicted percentiles')
                 percentile_labels.append(plt.text(
                     x=df_predictions_test['date'].iloc[-1],
@@ -189,7 +188,6 @@ def single_variable_case_count_plot(variable, df_actual, df_smoothed=None, df_pr
     plt.title(title)
     plt.ylabel('Case counts')
     plt.xlabel('Time')
-    plt.xticks(rotation=45)
     handles, labels = plt.gca().get_legend_handles_labels()
     legend_dict = dict(zip(labels, handles))
     plt.legend(legend_dict.values(), legend_dict.keys())
