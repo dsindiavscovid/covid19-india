@@ -1,0 +1,20 @@
+** To be moved
+*** Added jupyter
+*** Added pypandoc
+*** Fix input_case_count bug in covid19 data
+*** Change credentials default path to .keys/ and also add to gitignore
+*** If credentials don't exits, then continue/gracefully exit
+*** Add data files neccessary for running local data
+** HOW TO
+*** souce setup.sh
+*** virtualenv --python=python3 ~/.venv/cov-tst #create virtual env
+*** source ~/.venv/.../bin/activate
+*** pip3 install -r requirements.txt
+*** jupyter notebook <filename>
+*** Copy credentials to path
+**** Get <mlflow_credentials.json> via email, copy to path in config
+**** Get <pyathena.rc> via email, copy to path and set in config
+*** Change params in config/default_session_config.json
+**** Update params, esp ones like search_parameter: set it initially to 10 
+     for child_models->max_evals and ensemble_models->max_evals
+**** This is to speedup your testing of the pipeline, revert it to 1000, 100 later

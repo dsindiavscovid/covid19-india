@@ -47,8 +47,8 @@ class ModelBuildingSession(BaseModel):
 
     # Constant filepaths
     _DEFAULT_SESSION_CONFIG: str = "../config/default_session_config.json"
-    _ML_FLOW_CONFIG: str = "mlflow_credentials.json"
-    _OFFICIAL_DATA_PIPELINE_CONFIG: str = "../../pyathena/pyathena.rc"
+    _ML_FLOW_CONFIG: str = "../.keys/mlflow_credentials.json"
+    _OFFICIAL_DATA_PIPELINE_CONFIG: str = "../.keys/pyathena.rc"
     _DEFAULT_ROOT_DIR: str = "../outputs/"
     _DEFAULT_MODEL_BUILDING_REPORT_TEMPLATE: str = '../src/publishers/model_building_template_v1.mustache'
     _DEFAULT_PLANNING_REPORT_TEMPLATE: str = '../src/publishers/planning_template_v1.mustache'
