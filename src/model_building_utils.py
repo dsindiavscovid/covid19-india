@@ -74,8 +74,8 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            session_name (str):
-            user_name (str):
+            session_name (str): Session name variable
+            user_name (str): Name of the user running the experiment
 
         Returns:
 
@@ -97,7 +97,7 @@ class ModelBuildingSession(BaseModel):
         """Checks if the parameters required for a function are populated and throws an exception if not
 
         Args:
-            func_str (str):
+            func_str (str): 
 
         Returns:
 
@@ -126,8 +126,8 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            param_name (str):
-            top_field (str, optional):
+            param_name (str): 
+            top_field (str, optional): 
 
         Returns:
 
@@ -150,9 +150,9 @@ class ModelBuildingSession(BaseModel):
         """Set a specified possibly nested parameter to the specified value
 
         Args:
-            param_name (str):
-            param_value (Any):
-            top_field (str):
+            param_name (str): 
+            param_value (Any): 
+            top_field (str): 
 
         Returns:
 
@@ -311,7 +311,7 @@ class ModelBuildingSession(BaseModel):
         """Compute all the dates in time_interval_config in a consistent way
 
         Args:
-            time_interval_config (dict):
+            time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
 
         Returns:
 
@@ -363,21 +363,21 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            region_name (list):
-            region_type (str):
-            data_source (DataSource):
-            input_filepath (str):
-            time_interval_config (dict):
-            model_class (ModelClass):
-            model_parameters (dict, optional):
-            train_loss_function (dict, optional):
-            search_space (dict, optional):
-            search_parameters (dict, optional):
-            eval_loss_functions (list, optional):
-            uncertainty_parameters (dict, optional):
-            model_file (str, optional):
-            operation (str):
-            output_dir (str):
+            region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
+            region_type (str): Type of region [district, state]
+            data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
+            input_filepath (str): 
+            time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
+            model_class (ModelClass): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
+            model_parameters (dict, optional): Dict comprising model parameters. Pre-training, only a subset of choices are specified and post training, it is fully populated. See Session_Definition and Modelling_Details for more info.
+            train_loss_function (dict, optional): Dict to specify the loss function (loss metric and variable weights) to be used for training.
+            search_space (dict, optional): Dict that specifies the search space (lower and upper bounds) of all the model parameters.
+            search_parameters (dict, optional): Dict that specified parameters of the optimization process such as number of trials. See Session_Definition for more info.
+            eval_loss_functions (list, optional):  List of loss functions (dicts) for specifying the metric_name (default: mape) and weight on the compartment (default : 1)
+            uncertainty_parameters (dict, optional): Dict comprising parameters such as confidence_interval, percentiles required for generating a forecast distribution. See Session_Definition for more info.
+            model_file (str, optional): 
+            operation (str): 
+            output_dir (str): Path to the output directory for saving artifacts, trained models, forecasts, plots and reports
 
         Returns:
 
@@ -459,8 +459,8 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            session_name (str):
-            user_name (str):
+            session_name (str): Session name variable
+            user_name (str): Name of the user running the experiment
 
         Returns:
 
@@ -484,9 +484,9 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            experiment_name (str):
-            region_name (str):
-            interval_to_consider (int):
+            experiment_name (str): MLFlow experiment name
+            region_name (str): Region of interest (list of regions possibly singleton) for building the forecasting models
+            interval_to_consider (int): Number of days prior to the current date to start the search
 
         Returns:
 
@@ -500,11 +500,11 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            region_name (list):
-            region_type (str):
-            data_source (DataSource):
-            input_file_path (str):
-            output_artifacts (ModelBuildingSessionOutputArtifacts):
+            region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
+            region_type (str): Type of region [district, state]
+            data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
+            input_file_path (str): Path to the input csv if data_source is set to direct_csv
+            output_artifacts (ModelBuildingSessionOutputArtifacts): List of artifacts generated in the model building session (model jsons, pngs, csvs)
 
         Returns:
 
@@ -527,21 +527,21 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            verbose (bool):
-            region_name (list):
-            region_type (str):
-            data_source (DataSource):
-            input_filepath (str):
-            time_interval_config (dict):
-            model_class (str):
-            model_parameters (dict):
-            train_loss_function (dict):
-            search_space (dict):
-            search_parameters (dict):
-            eval_loss_functions (list):
-            uncertainty_parameters (dict):
-            output_artifacts (ModelBuildingSessionOutputArtifacts):
-            output_dir (str):
+            verbose (bool): 
+            region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
+            region_type (str): Type of region [district, state]
+            data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
+            input_filepath (str): 
+            time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
+            model_class (str): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
+            model_parameters (dict): Dict comprising model parameters. Pre-training, only a subset of choices are specified and post training, it is fully populated. See Session_Definition and Modelling_Details for more info.
+            train_loss_function (dict): Dict to specify the loss function (loss metric and variable weights) to be used for training.
+            search_space (dict): Dict that specifies the search space (lower and upper bounds) of all the model parameters.
+            search_parameters (dict): Dict that specified parameters of the optimization process such as number of trials. See Session_Definition for more info.
+            eval_loss_functions (list):  List of loss functions (dicts) for specifying the metric_name (default: mape) and weight on the compartment (default : 1)
+            uncertainty_parameters (dict): Dict comprising parameters such as confidence_interval, percentiles required for generating a forecast distribution. See Session_Definition for more info.
+            output_artifacts (ModelBuildingSessionOutputArtifacts): List of artifacts generated in the model building session (model jsons, pngs, csvs)
+            output_dir (str): Path to the output directory for saving artifacts, trained models, forecasts, plots and reports
 
         Returns:
 
@@ -567,20 +567,20 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            region_name (list):
-            region_type (str):
-            data_source (DataSource):
-            input_filepath (str):
-            time_interval_config (dict):
-            model_class (str):
-            model_parameters (dict):
-            train_loss_function (dict):
-            search_space (dict):
-            search_parameters (dict):
-            eval_loss_functions (list):
-            uncertainty_parameters (dict):
-            output_artifacts (ModelBuildingSessionOutputArtifacts):
-            output_dir (str):
+            region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
+            region_type (str): Type of region [district, state]
+            data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
+            input_filepath (str): 
+            time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
+            model_class (str): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
+            model_parameters (dict): Dict comprising model parameters. Pre-training, only a subset of choices are specified and post training, it is fully populated. See Session_Definition and Modelling_Details for more info.
+            train_loss_function (dict): Dict to specify the loss function (loss metric and variable weights) to be used for training.
+            search_space (dict): Dict that specifies the search space (lower and upper bounds) of all the model parameters.
+            search_parameters (dict): Dict that specified parameters of the optimization process such as number of trials. See Session_Definition for more info.
+            eval_loss_functions (list):  List of loss functions (dicts) for specifying the metric_name (default: mape) and weight on the compartment (default : 1)
+            uncertainty_parameters (dict): Dict comprising parameters such as confidence_interval, percentiles required for generating a forecast distribution. See Session_Definition for more info.
+            output_artifacts (ModelBuildingSessionOutputArtifacts): List of artifacts generated in the model building session (model jsons, pngs, csvs)
+            output_dir (str): Path to the output directory for saving artifacts, trained models, forecasts, plots and reports
 
         Returns:
 
@@ -664,17 +664,17 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            region_name (list):
-            region_type (str):
-            data_source (DataSource):
-            input_filepath (str):
-            time_interval_config (dict):
-            model_class (ModelClass):
-            model_parameters (dict):
-            uncertainty_parameters (dict):
-            output_artifacts (ModelBuildingSessionOutputArtifacts):
-            output_dir (str):
-            verbose (bool):
+            region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
+            region_type (str): Type of region [district, state]
+            data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
+            input_filepath (str): 
+            time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
+            model_class (ModelClass): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
+            model_parameters (dict): Dict comprising model parameters. Pre-training, only a subset of choices are specified and post training, it is fully populated. See Session_Definition and Modelling_Details for more info.
+            uncertainty_parameters (dict): Dict comprising parameters such as confidence_interval, percentiles required for generating a forecast distribution. See Session_Definition for more info.
+            output_artifacts (ModelBuildingSessionOutputArtifacts): List of artifacts generated in the model building session (model jsons, pngs, csvs)
+            output_dir (str): Path to the output directory for saving artifacts, trained models, forecasts, plots and reports
+            verbose (bool): 
 
         Returns:
 
@@ -805,18 +805,18 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            region_name (list):
-            region_type (str):
-            data_source (DataSource):
-            input_filepath (str):
-            time_interval_config (dict):
-            model_class (ModelClass):
-            uncertainty_parameters (dict):
-            planning (dict):
-            staffing (dict):
-            model_file (str):
-            output_artifacts (ModelBuildingSessionOutputArtifacts):
-            output_dir (str):
+            region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
+            region_type (str): Type of region [district, state]
+            data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
+            input_filepath (str): 
+            time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
+            model_class (ModelClass): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
+            uncertainty_parameters (dict): Dict comprising parameters such as confidence_interval, percentiles required for generating a forecast distribution. See Session_Definition for more info.
+            planning (dict): Dict comprising parameters such as planning level and scenarios that are required for planning. See Session_Definition for more info.
+            staffing (dict): Dict comprising parameters such as staffing ratios, bed type ratios that are required to estimate staffing. See Session_Definition for more info.
+            model_file (str): 
+            output_artifacts (ModelBuildingSessionOutputArtifacts): List of artifacts generated in the model building session (model jsons, pngs, csvs)
+            output_dir (str): Path to the output directory for saving artifacts, trained models, forecasts, plots and reports
 
         Returns:
 
@@ -921,8 +921,8 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            output_artifacts (ModelBuildingSessionOutputArtifacts):
-            display_list (list):
+            output_artifacts (ModelBuildingSessionOutputArtifacts): List of artifacts generated in the model building session (model jsons, pngs, csvs)
+            display_list (list): 
 
         Returns:
 
@@ -941,11 +941,11 @@ class ModelBuildingSession(BaseModel):
         """
 
         Args:
-            params (ModelBuildingSessionParams):
-            metrics (ModelBuildingSessionMetrics):
-            output_artifacts (ModelBuildingSessionOutputArtifacts):
-            experiment_name (str):
-            session_name (str):
+            params (ModelBuildingSessionParams): Dict comprising input parameters specified by the user for the session. See Session_Definition for more info.
+            metrics (ModelBuildingSessionMetrics): Dict comprising output metrics such as losses associated with the model building. See Session_Definition for more info.
+            output_artifacts (ModelBuildingSessionOutputArtifacts): List of artifacts generated in the model building session (model jsons, pngs, csvs)
+            experiment_name (str): MLFlow experiment name
+            session_name (str): Session name variable
 
         Returns:
 
