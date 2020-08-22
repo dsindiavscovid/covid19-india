@@ -256,16 +256,15 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         if self.model_parameters['modes']['training_mode'] == 'only_beta':
             only_beta_search_space = dict()
             only_beta_search_space['beta'] = search_space['beta']
-            # TODO: Which search parameters do we pass here
             betaResults = super().train(region_metadata, region_observations, train_start_date,
-                                        train_end_date, only_beta_search_space, search_parameters, train_loss_function)
+                                        train_end_date, only_beta_search_space, search_parameters['ensemble_model'], train_loss_function)
             betaResults['param_ranges'] = self.get_statistics_of_params()
             return betaResults
         elif self.model_parameters['modes']['training_mode'] == 'constituent_models':
             if 'beta' in search_space.keys():
                 search_space.pop('beta')
             return self.train_for_ensemble(region_metadata, region_observations, train_start_date,
-                                           train_end_date, search_space, search_parameters, train_loss_function)
+                                           train_end_date, search_space, search_parameters['child_model'], train_loss_function)
         elif self.model_parameters['modes']['training_mode'] == 'full':
             only_beta_search_space = dict()
             only_beta_search_space['beta'] = copy.deepcopy(search_space['beta'])

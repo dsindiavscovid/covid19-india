@@ -17,3 +17,4 @@ mlflow~=1.8.0
 chevron~=0.13.1
 pyathena~=1.10.7
 ipython~=7.15.0
+pypandoc~=1.5
