@@ -17,7 +17,7 @@ class DataFetcherModule(object):
             data_source (DataSource): Data source
             smooth (bool): if True, perform windowed smoothing
             filepath (str, optional): input data file path
-            simple (str, optional): simplify dataframe
+            simple (bool, optional): simplify dataframe
 
         Returns:
             pd.DataFrame: dataframe of case counts
@@ -56,7 +56,7 @@ class DataFetcherModule(object):
         return pd.read_csv(filepath)
 
     @staticmethod
-    def get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath):
+    def get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath, simple=False):
         """Get actual and smoothed data for a region
 
         Args:
@@ -64,14 +64,15 @@ class DataFetcherModule(object):
             region_name (list): List of regions
             data_source (DataSource): Data source
             input_filepath (str): input data file path
+            simple (bool, optional): simplify dataframe
 
         Returns:
             dict: dictionary of dataframes with actual and smoothed observations
         """
         df_actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
-                                                                  smooth=False, filepath=input_filepath)
+                                                                  smooth=False, filepath=input_filepath, simple=simple)
         df_smoothed = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
-                                                                    smooth=True, filepath=input_filepath)
+                                                                    smooth=True, filepath=input_filepath, simple=simple)
 
         return {'actual': df_actual, 'smoothed': df_smoothed}
 

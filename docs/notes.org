@@ -1,9 +1,5 @@
 ** To be moved
 *** Added jupyter
-*** Added pypandoc
-*** Fix input_case_count bug in covid19 data
-*** Change credentials default path to .keys/ and also add to gitignore
-*** If credentials don't exits, then continue/gracefully exit
 *** Add data files neccessary for running local data
 ** HOW TO
 *** souce setup.sh

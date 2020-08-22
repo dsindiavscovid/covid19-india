@@ -303,8 +303,8 @@ class ModelBuildingSession(BaseModel):
         os.environ['MLFLOW_TRACKING_PASSWORD'] = mlflow_config['password']
 
         # Official pipeline configuration
-        os.system('source ' + ModelBuildingSession._OFFICIAL_DATA_PIPELINE_CONFIG)
-        return
+        if os.system('source ' + ModelBuildingSession._OFFICIAL_DATA_PIPELINE_CONFIG) != 0:
+            print('Official data pipeline not setup')
 
     @staticmethod
     def _compute_dates(time_interval_config):
@@ -512,7 +512,6 @@ class ModelBuildingSession(BaseModel):
         outputs = {}
         actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
                                                                filepath=input_file_path, smooth=False, simple=True)
-
         write_file(actual, output_artifacts.cleaned_case_count_file, "csv", "dataframe")
         multivariate_case_count_plot(actual, column_label='', column_tag='', title=region_name,
                                      path=output_artifacts.plot_case_count)
@@ -952,8 +951,8 @@ class ModelBuildingSession(BaseModel):
         """
         input_artifacts = {input_artifact.split(".")[-1]: get_dict_field(params.dict(), input_artifact.split(".")) for
                            input_artifact in params.input_artifacts}
-        output_artifacts_to_log = output_artifacts.dict()
-        output_artifacts_to_log.update(input_artifacts)
-        outputs = mlflow_logger.log_to_mlflow(params, metrics, output_artifacts_to_log,
+        artifacts_to_log = output_artifacts.dict()
+        artifacts_to_log.update(input_artifacts)
+        outputs = mlflow_logger.log_to_mlflow(params, metrics, artifacts_to_log,
                                               experiment_name=experiment_name, run_name=session_name)
         return outputs

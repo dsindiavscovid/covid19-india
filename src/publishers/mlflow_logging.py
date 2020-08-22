@@ -1,5 +1,6 @@
 import datetime
 import numbers
+import os
 
 import mlflow
 import pandas as pd
@@ -43,7 +44,8 @@ def log_to_mlflow(params, metrics, artifact_dict, tags=None, experiment_name="de
             if isinstance(value, numbers.Number):
                 mlflow.log_metric(key=metric, value=value)
         for artifact, path in artifact_dict.items():
-            mlflow.log_artifact(path)
+            if path is not None and os.path.isfile(path):
+                mlflow.log_artifact(path)
         if tags is not None:
             mlflow.set_tags(tags)
 
@@ -65,14 +67,16 @@ def get_previous_runs(experiment_name, region, interval=0):
     start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
     experiment = mlflow.get_experiment_by_name(experiment_name)
+    if experiment is None:
+        return pd.DataFrame()
     experiment_id = experiment.experiment_id
 
     components = [TRACKING_URL, '#/experiments', experiment_id, 'runs']
     prefix = "/".join(components)
 
-    query = "params.region = '{}'".format(region)
-    runs_df = mlflow.search_runs(experiment_ids=experiment_id, filter_string=query)
+    query = "params.region_name = '{}'".format(region)
 
+    runs_df = mlflow.search_runs(experiment_ids=experiment_id, filter_string=query)
     if runs_df.empty:
         return pd.DataFrame()
 
