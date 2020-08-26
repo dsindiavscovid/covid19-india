@@ -32,30 +32,44 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
     def supported_forecast_variables(self):
         return [ForecastVariable.confirmed, ForecastVariable.recovered, ForecastVariable.active]
     
-    def update_nested_dict(self, meandict, x, key):
+    def update_nested_dict(self, meandict, x, key,  w):
         if(type(x) == dict):
             if(key not in meandict.keys()):
                 meandict[key] = dict()
             for k in x.keys():
-                meandict[key] = self.update_nested_dict(meandict[key], x[k], k)
+                meandict[key] = self.update_nested_dict(meandict[key], x[k], k, w)
             return meandict
         else:
             if(key in meandict.keys()):
-                meandict[key] += x
+                if(isinstance(x, float) or isinstance(x, int)):
+                    meandict[key] += x*w
+                else:
+                    meandict[key] = x
             else:
-                meandict[key] = x
+                if(isinstance(x, float) or isinstance(x, int)):
+                    meandict[key] = x*w
+                else:
+                    meandict[key] = x
             return meandict
     
     def get_mean_params(self):
-        if(self.weights == None):
-            self.weights = {idx: np.exp(-self.model_parameters['beta'] * loss) for idx, loss in self.losses.items()}
-
+        beta = float(self.model_parameters['beta'])
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = copy.deepcopy(self.weights)
+        s = 0
+        for idx in self.losses.keys():
+            s+=weights[idx]
+        for idx in weights.keys():
+            weights[idx] = weights[idx]/s
+            
         constituent_dict = self.model_parameters['constituent_models']
         mean_params = dict()
         for idx in constituent_dict.keys():
             constituent_model = constituent_dict[idx]['model_parameters']
             for key in constituent_model:
-                mean_params.update(self.update_nested_dict(mean_params, constituent_model[key], key))
+                mean_params.update(self.update_nested_dict(mean_params, constituent_model[key], key, weights[idx]))
         return mean_params
     
     def get_params_uncertainty(self): 
