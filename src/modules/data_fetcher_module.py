@@ -56,46 +56,46 @@ class DataFetcherModule(object):
         return pd.read_csv(filepath)
 
     @staticmethod
-    def get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath, simple=False):
+    def get_actual_smooth_for_region(region_type, region_name, data_source, input_file_path, simple=False):
         """Get actual and smoothed data for a region
 
         Args:
             region_type (str): Type of region (district or state)
             region_name (list): List of regions
             data_source (DataSource): Data source
-            input_filepath (str): input data file path
+            input_file_path (str): input data file path
             simple (bool, optional): simplify dataframe
 
         Returns:
             dict: dictionary of dataframes with actual and smoothed observations
         """
         df_actual = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
-                                                                  smooth=False, filepath=input_filepath, simple=simple)
+                                                                  smooth=False, filepath=input_file_path, simple=simple)
         df_smoothed = DataFetcherModule.get_observations_for_region(region_type, region_name, data_source=data_source,
-                                                                    smooth=True, filepath=input_filepath, simple=simple)
+                                                                    smooth=True, filepath=input_file_path, simple=simple)
 
         return {'actual': df_actual, 'smoothed': df_smoothed}
 
     @staticmethod
-    def get_regional_data(region_type, region_name, data_source=DataSource.tracker_data_all, input_filepath=None,
-                          metadata_filepath="../data/regional_metadata.json"):
+    def get_regional_data(region_type, region_name, data_source=DataSource.tracker_data_all, input_file_path=None,
+                          metadata_file_path="../data/regional_metadata.json"):
         """Get actual observations and metadata for a region
 
         Args:
             region_type (str): Type of region (district or state)
             region_name (list): List of regions
             data_source (DataSource): Data source
-            input_filepath (str): input data file path
-            metadata_filepath (str, optional): region metadata file path (default: "../data/regional_metadata.json")
+            input_file_path (str): input data file path
+            metadata_file_path (str, optional): region metadata file path (default: "../data/regional_metadata.json")
 
         Returns:
             dict: dictionary of actual observations and metadata
         """
         data = {"actual": DataFetcherModule.get_observations_for_region(region_type, region_name,
                                                                         data_source=data_source, smooth=False,
-                                                                        filepath=input_filepath, simple=False),
+                                                                        filepath=input_file_path, simple=False),
                 "metadata": DataFetcherModule.get_regional_metadata(region_type, region_name, data_source=data_source,
-                                                                    filepath=metadata_filepath)}
+                                                                    filepath=metadata_file_path)}
         return data
 
 

@@ -66,7 +66,7 @@ def load_observations_data():
             df_date_state = pd.DataFrame.from_dict(data[date][state]).T.reset_index()
             df_date_state = df_date_state.rename({'index': 'district'}, axis='columns')
             df_date_state['active'] = df_date_state['confirmed'] - \
-                                      (df_date_state['recovered'] + df_date_state['deceased'])
+                (df_date_state['recovered'] + df_date_state['deceased'])
             df_date_state['state'] = statecode_to_state_dict[state]
             df_date_state['date'] = date
             df_districts_all = pd.concat([df_districts_all, df_date_state], ignore_index=True)
@@ -82,7 +82,7 @@ def load_observations_data():
 class TrackerDataAll(DataFetcherBase):
 
     def get_observations_for_single_region(self, region_type, region_name, filepath=None):
-        region_name = region_name = " ".join([word.capitalize() for word in region_name.split(" ")])
+        region_name = " ".join([word.capitalize() for word in region_name.split(" ")])
         observations_df = load_observations_data()
         region_df = observations_df[
             (observations_df["district"] == region_name) & (region_type.lower() == 'district')]

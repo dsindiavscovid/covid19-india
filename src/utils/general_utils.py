@@ -23,7 +23,7 @@ def get_dict_field(d, key_list):
     """
         Gets a multi-level nested element specified by a list of keys in a dict object to the specified value
     """
-    # TODO: Check if this works and also move it to an appropriate utils file - check for pydantic
+    # TODO: Check for pydantic
     # There should be alternate robust implementation via JSONPath or something else
     # dicts are mutable objects
     tmp = d
@@ -42,7 +42,6 @@ def set_dict_field(d, key_list, value):
     """
         Sets a multi-level nested element specified by a list of keys in a dict object to the specified value
     """
-    # TODO: Check if this works and also move it to an appropriate utils file
     # There should be alternate robust implementation via JSONPath or something else
     # dicts are mutable objects
     tmp = d
@@ -78,8 +77,8 @@ def merge_dicts(dictlist):
     return dunion
 
 
-# TODO: flatten -- dicts and dataframes to flat dict
 def flatten(d):
+    # TODO: flatten -- dicts and dataframes to flat dict
     d_flat = {}
     # val - type -dict - continue DFS
     # val - type -data frame - create row/column keys

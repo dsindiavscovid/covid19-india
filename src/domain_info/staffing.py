@@ -12,7 +12,7 @@ def get_clean_staffing_ratio(staff_ratios_file_path: str):
     return staff_ratios.copy()
 
 
-def compute_staffing_matrix(active_count: int, bed_type_ratio: int,
+def compute_staffing_matrix(active_count: int, bed_type_ratio: dict,
                             staff_ratios_file_path: str,
                             bed_multiplier_factor: int):
     """Computes the staffing matrix for a given active_count and other params"""

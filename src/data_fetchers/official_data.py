@@ -67,7 +67,6 @@ def get_athena_dataframes(pyathena_rc_path=None):
 
     # Run SQL SELECT queries to get all the tables in the database as pandas data frames
     data_frames = {}
-    tables_list = cursor.execute('Show tables').as_pandas().to_numpy().reshape(-1, )
     tables_list = ['covid_case_summary', 'new_covid_case_summary', 'testing_summary']
     for table in tables_list:
         data_frames[table] = cursor.execute(

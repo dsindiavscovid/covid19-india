@@ -29,7 +29,8 @@ class ForecastingModule(object):
                            forecast_end_date: str):
         predictions_df = self._model.predict(region_metadata, region_observations, run_day, forecast_start_date,
                                              forecast_end_date)
-        predictions_df = convert_to_old_required_format(run_day, predictions_df, region_type, region_name)
+        predictions_df = convert_to_old_required_format(run_day, predictions_df, region_type, region_name,
+                                                        self._model_parameters['MAPE'], self._model.__name__)
         return predictions_df.to_json()
 
     def predict_for_region(self, data_source, region_type, region_name, run_day, forecast_start_date,

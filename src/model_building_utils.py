@@ -356,7 +356,7 @@ class ModelBuildingSession(BaseModel):
         return time_interval_config
 
     @staticmethod
-    def _generate_model_operations_config(region_name, region_type, data_source, input_filepath, time_interval_config,
+    def _generate_model_operations_config(region_name, region_type, data_source, input_file_path, time_interval_config,
                                           model_class, model_parameters, train_loss_function, search_space,
                                           search_parameters, eval_loss_functions, uncertainty_parameters, model_file,
                                           operation, output_dir):
@@ -366,7 +366,7 @@ class ModelBuildingSession(BaseModel):
             region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
             region_type (str): Type of region [district, state]
             data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
-            input_filepath (str): 
+            input_file_path (str): Path to the input csv if data_source is set to direct_csv
             time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
             model_class (ModelClass): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
             model_parameters (dict, optional): Dict comprising model parameters. Pre-training, only a subset of choices are specified and post training, it is fully populated. See Session_Definition and Modelling_Details for more info.
@@ -392,7 +392,7 @@ class ModelBuildingSession(BaseModel):
         cfg['region_name'] = region_name if isinstance(region_name, list) else [region_name]
         cfg['region_type'] = region_type
         cfg['model_class'] = model_class
-        cfg['input_filepath'] = input_filepath
+        cfg['input_filepath'] = input_file_path
         cfg['output_file_prefix'] = operation
         cfg['output_dir'] = output_dir
 
@@ -518,7 +518,7 @@ class ModelBuildingSession(BaseModel):
         return outputs
 
     @staticmethod
-    def build_models_and_generate_forecast_static(region_name, region_type, data_source, input_filepath,
+    def build_models_and_generate_forecast_static(region_name, region_type, data_source, input_file_path,
                                                   time_interval_config, model_class, model_parameters,
                                                   train_loss_function, search_space, search_parameters,
                                                   eval_loss_functions, uncertainty_parameters, output_artifacts,
@@ -530,7 +530,7 @@ class ModelBuildingSession(BaseModel):
             region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
             region_type (str): Type of region [district, state]
             data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
-            input_filepath (str): 
+            input_file_path (str): Path to the input csv if data_source is set to direct_csv
             time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
             model_class (str): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
             model_parameters (dict): Dict comprising model parameters. Pre-training, only a subset of choices are specified and post training, it is fully populated. See Session_Definition and Modelling_Details for more info.
@@ -546,13 +546,13 @@ class ModelBuildingSession(BaseModel):
 
         """
         outputs = {}
-        metrics = ModelBuildingSession.train_eval_static(region_name, region_type, data_source, input_filepath,
+        metrics = ModelBuildingSession.train_eval_static(region_name, region_type, data_source, input_file_path,
                                                          time_interval_config, model_class, model_parameters,
                                                          train_loss_function, search_space, search_parameters,
                                                          eval_loss_functions, uncertainty_parameters, output_artifacts,
                                                          output_dir)
 
-        ModelBuildingSession.forecast_and_plot_static(region_name, region_type, data_source, input_filepath,
+        ModelBuildingSession.forecast_and_plot_static(region_name, region_type, data_source, input_file_path,
                                                       time_interval_config, model_class, model_parameters,
                                                       uncertainty_parameters, output_artifacts, output_dir, verbose)
 
@@ -560,7 +560,7 @@ class ModelBuildingSession(BaseModel):
         return outputs
 
     @staticmethod
-    def train_eval_static(region_name, region_type, data_source, input_filepath, time_interval_config, model_class,
+    def train_eval_static(region_name, region_type, data_source, input_file_path, time_interval_config, model_class,
                           model_parameters, train_loss_function, search_space, search_parameters, eval_loss_functions,
                           uncertainty_parameters, output_artifacts, output_dir):
         """
@@ -569,7 +569,7 @@ class ModelBuildingSession(BaseModel):
             region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
             region_type (str): Type of region [district, state]
             data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
-            input_filepath (str): 
+            input_file_path (str): Path to the input csv if data_source is set to direct_csv
             time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
             model_class (str): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
             model_parameters (dict): Dict comprising model parameters. Pre-training, only a subset of choices are specified and post training, it is fully populated. See Session_Definition and Modelling_Details for more info.
@@ -590,7 +590,7 @@ class ModelBuildingSession(BaseModel):
 
         # generate the config
         M1_train_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
-                                                                                 input_filepath, time_interval_config,
+                                                                                 input_file_path, time_interval_config,
                                                                                  model_class, model_parameters,
                                                                                  train_loss_function, search_space,
                                                                                  search_parameters, eval_loss_functions,
@@ -612,7 +612,7 @@ class ModelBuildingSession(BaseModel):
 
         # generate the config
         M1_test_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
-                                                                                input_filepath, time_interval_config,
+                                                                                input_file_path, time_interval_config,
                                                                                 model_class, model_parameters,
                                                                                 train_loss_function, search_space,
                                                                                 search_parameters, eval_loss_functions,
@@ -630,7 +630,7 @@ class ModelBuildingSession(BaseModel):
 
         # generate the config
         M2_train_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
-                                                                                 input_filepath, time_interval_config,
+                                                                                 input_file_path, time_interval_config,
                                                                                  model_class, model_parameters,
                                                                                  train_loss_function, search_space,
                                                                                  search_parameters, eval_loss_functions,
@@ -657,7 +657,7 @@ class ModelBuildingSession(BaseModel):
         return metrics
 
     @staticmethod
-    def forecast_and_plot_static(region_name, region_type, data_source, input_filepath, time_interval_config,
+    def forecast_and_plot_static(region_name, region_type, data_source, input_file_path, time_interval_config,
                                  model_class, model_parameters, uncertainty_parameters, output_artifacts, output_dir,
                                  verbose=True):
         """
@@ -666,7 +666,7 @@ class ModelBuildingSession(BaseModel):
             region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
             region_type (str): Type of region [district, state]
             data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
-            input_filepath (str): 
+            input_file_path (str): Path to the input csv if data_source is set to direct_csv
             time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
             model_class (ModelClass): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
             model_parameters (dict): Dict comprising model parameters. Pre-training, only a subset of choices are specified and post training, it is fully populated. See Session_Definition and Modelling_Details for more info.
@@ -702,15 +702,15 @@ class ModelBuildingSession(BaseModel):
         # Get a reusable forecast config
         # TODO: Forecasting module requires dates and model params to be set when initializing
         forecast_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
-                                                                                 input_filepath, time_interval_config,
+                                                                                 input_file_path, time_interval_config,
                                                                                  model_class, None, None, None, None,
                                                                                  None, None,
                                                                                  output_artifacts.M1_model_params,
                                                                                  "forecast", output_dir)
 
         # Get actual and smoothed observations in correct ranges
-        df_m1 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath)
-        df_m2 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_filepath)
+        df_m1 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_file_path)
+        df_m2 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_file_path)
 
         # M1 train
         if verbose:
@@ -807,7 +807,7 @@ class ModelBuildingSession(BaseModel):
             region_name (list): Region of interest (list of regions possibly singleton) for building the forecasting models
             region_type (str): Type of region [district, state]
             data_source (DataSource): Source of input data [direct_csv, official_data, rootnet_stats_history, tracker_data_all] (default tracker_data_all)
-            input_filepath (str): 
+            input_file_path (str): Path to the input csv if data_source is set to direct_csv
             time_interval_config (dict): Dict comprising all the key dates or alternately interval durations for training, evaluation, forecast and plotting. See Session_Definition for more info.
             model_class (ModelClass): Model class of the ensemble model [homogeneous_ensemble, heterogeneous_ensemble]
             uncertainty_parameters (dict): Dict comprising parameters such as confidence_interval, percentiles required for generating a forecast distribution. See Session_Definition for more info.
@@ -830,7 +830,7 @@ class ModelBuildingSession(BaseModel):
 
         # 2. get the relevant data
         regional_data = DataFetcherModule.get_regional_data(region_type, [region_name], data_source=data_source,
-                                                            input_filepath=input_file_path)
+                                                            input_file_path=input_file_path)
 
         # 3. get the representative model for the chosen planning level
         percentile_params = M2_model.get_params_for_percentiles(

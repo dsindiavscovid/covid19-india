@@ -3,9 +3,9 @@ import enum
 
 @enum.unique
 class ForecastVariable(str, enum.Enum):
-    ##TODO: add definitions
-    ## confirmed = active + recovered + deceased
-    ## active = hospitalized + icu(no ventilator) + ventilation + isolated + unknown
+    # TODO: add definitions
+    # confirmed = active + recovered + deceased
+    # active = hospitalized + icu(no ventilator) + ventilation + isolated + unknown
     active = "active"
     recovered = "recovered"
     deceased = "deceased"

@@ -38,7 +38,6 @@ class ForecastingModuleConfig(BaseConfig):
     forecast_run_day: str
     forecast_start_date: str
     forecast_end_date: str
-    # forecast_variables: List[ForecastVariable] TODO: Is this necessary
 
 
 class Intervention(BaseModel):
