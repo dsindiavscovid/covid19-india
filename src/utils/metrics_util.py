@@ -18,15 +18,13 @@ def rmse_delta(y_true, y_pred):
     return math.sqrt(mse)
 
 def rmsle(y_true, y_pred):
-    y_true_delta = [y_true[i] - y_true[i-1] for i in range(1, len(y_true))]
-    y_pred_delta = [y_pred[i] - y_pred[i-1] for i in range(1, len(y_pred))]
-    msle = mean_squared_log_error(y_true_delta, y_pred_delta)
+    msle = mean_squared_log_error(y_true, y_pred)
     return math.sqrt(msle)
 
 def rmsle_delta(y_true, y_pred):
     y_true_delta = [y_true[i] - y_true[i-1] for i in range(1, len(y_true))]
     y_pred_delta = [y_pred[i] - y_pred[i-1] for i in range(1, len(y_pred))]
-    msle = mean_squared_log_error(y_true, y_pred)
+    msle = mean_squared_log_error(y_true_delta, y_pred_delta)
     return math.sqrt(msle)
 
 def mape(y_true, y_pred):
