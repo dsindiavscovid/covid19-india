@@ -1,5 +1,12 @@
+from copy import deepcopy
+
+import pandas as pd
+
+
 def weights_to_pdf(weights):
-    return weights/weights.sum()
+    if weights.sum() != 0:
+        return weights/weights.sum()
+    return weights
 
 
 def pdf_to_cdf(pdf):
@@ -17,7 +24,6 @@ def get_best_index(df, percentile, tolerance=1):
     Returns:
         str: index of the row with lowest loss corresponding to the percentile (within a tolerance limit)
     """
-
     df_window = df[df['cdf'].between(max(0.0, (percentile - tolerance)/100), min(1.0, (percentile + tolerance)/100))]
     if not df_window.dropna().empty:
         idx = df_window['cdf'].idxmin()

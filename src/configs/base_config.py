@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Union
 
 from entities.intervention_variable import InputType
 from entities.forecast_variables import ForecastVariable
@@ -8,13 +8,15 @@ from entities.loss_function import LossFunction
 from entities.data_source import DataSource
 
 
+
 class BaseConfig(BaseModel):
-    data_source: str = DataSource.tracker_district_daily
+    data_source: DataSource = DataSource.tracker_district_daily
     region_name: List[str]
     region_type: str
     model_class: ModelClass
     model_parameters: dict
     output_filepath: str = None
+    input_filepath: str = None
 
 
 class TrainingModuleConfig(BaseConfig):

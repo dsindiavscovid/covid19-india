@@ -8,7 +8,8 @@ from hyperopt import hp
 
 from entities.forecast_variables import ForecastVariable
 from entities.loss_function import LossFunction
-import model_wrappers.model_factory as model_factory_alias
+from entities.model_class import ModelClass
+from model_wrappers import model_factory as model_factory_alias
 from utils.ensemble_util import uncertainty_dict_to_df
 from utils.distribution_util import weights_to_pdf, pdf_to_cdf, get_best_index
 from utils.hyperparam_util import hyperparam_tuning_ensemble
@@ -17,8 +18,9 @@ from model_wrappers.heterogeneous_ensemble import HeterogeneousEnsemble
 class HomogeneousEnsemble(HeterogeneousEnsemble):
     
     def __init__(self, model_parameters):
-        self.child_model_class = model_parameters['child_model']['model_class']
-        self.child_model_parameters = model_parameters['child_model']['model_class']
+        self.child_model_class = ModelClass(model_parameters['child_model']['model_class'])
+        self.child_model_parameters = model_parameters['child_model']['model_parameters']
+        
         self.model_parameters = model_parameters
         if('constituent_models' in model_parameters.keys()):
             super().__init__(model_parameters)
@@ -30,30 +32,44 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
     def supported_forecast_variables(self):
         return [ForecastVariable.confirmed, ForecastVariable.recovered, ForecastVariable.active]
     
-    def update_nested_dict(self, meandict, x, key):
+    def update_nested_dict(self, meandict, x, key,  w):
         if(type(x) == dict):
             if(key not in meandict.keys()):
                 meandict[key] = dict()
             for k in x.keys():
-                meandict[key] = self.update_nested_dict(meandict[key], x[k], k)
+                meandict[key] = self.update_nested_dict(meandict[key], x[k], k, w)
             return meandict
         else:
             if(key in meandict.keys()):
-                meandict[key] += x
+                if(isinstance(x, float) or isinstance(x, int)):
+                    meandict[key] += x*w
+                else:
+                    meandict[key] = x
             else:
-                meandict[key] = x
+                if(isinstance(x, float) or isinstance(x, int)):
+                    meandict[key] = x*w
+                else:
+                    meandict[key] = x
             return meandict
     
     def get_mean_params(self):
-        if(self.weights == None):
-            self.weights = {idx: np.exp(-self.model_parameters['beta'] * loss) for idx, loss in self.losses.items()}
-
+        beta = float(self.model_parameters['beta'])
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = copy.deepcopy(self.weights)
+        s = 0
+        for idx in self.losses.keys():
+            s+=weights[idx]
+        for idx in weights.keys():
+            weights[idx] = weights[idx]/s
+            
         constituent_dict = self.model_parameters['constituent_models']
         mean_params = dict()
         for idx in constituent_dict.keys():
             constituent_model = constituent_dict[idx]['model_parameters']
             for key in constituent_model:
-                mean_params.update(self.update_nested_dict(mean_params, constituent_model[key], key))
+                mean_params.update(self.update_nested_dict(mean_params, constituent_model[key], key, weights[idx]))
         return mean_params
     
     def get_params_uncertainty(self): 
@@ -66,12 +82,15 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         confidence_intervals = {"low": alpha/2, "high": 100-alpha/2}
         window = uncertainty_params['window']
         
-        if(self.weights == None):
-            self.weights = {idx: np.exp(-self.model_parameters['beta'] * loss) for idx, loss in self.losses.items()}
-        
+        beta = float(self.model_parameters['beta'])
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = deepcopy(self.weights)
+            
         params_dict = dict()
         for idx in self.model_parameters['constituent_model_losses']:
-            params_dict[idx] = [self.weights[idx], 
+            params_dict[idx] = [weights[idx], 
                                 self.model_parameters['constituent_models'][idx]['model_parameters'][param_of_interest]]
     
         params_df = pd.DataFrame.from_dict(params_dict, orient = 'index', columns = ['weight', 'ParamOfInterest'])
@@ -87,7 +106,6 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             percentiles_dict[c] = get_best_index(params_df, confidence_intervals[c], window)
             
         percentiles_params = dict()
-        print(percentiles_dict)
         for key in percentiles_dict.keys():
             percentiles_params[key] = {}
             idx = percentiles_dict[key]
@@ -101,13 +119,71 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         
         return percentiles_params
     
+    def _flatten_dict(self, oldDict, appendStr = ""):
+        newDict = dict()
+        for key in oldDict.keys():
+            if(type(oldDict[key]) ==  dict):
+                newDict.update(self._flatten_dict(oldDict[key], appendStr+key+"_"))
+            else:
+                if(isinstance(oldDict[key], float) or isinstance(oldDict[key], int)):
+                    newDict[appendStr+key] = oldDict[key]
+        return newDict
+        
+    def _get_statistics_given_indexes(self, list_of_indexes, appendStr):
+        if(len(list_of_indexes)<=0):
+            return pd.DataFrame()
+        list_of_params = dict()
+        for idx in list_of_indexes:
+            list_of_params[idx] = (self._flatten_dict(self.models[idx].model_parameters))
+        
+        keys = list(list_of_params[list_of_indexes[0]].keys())
+        
+        beta = float(self.model_parameters['beta'])
+        if self.weights is None:
+            weights = {idx: np.exp(-beta * loss) for idx, loss in self.losses.items()}
+        else:
+            weights = deepcopy(self.weights)
+        s = 0
+        for idx in list_of_indexes:
+            s+=weights[idx]
+        for idx in weights.keys():
+            weights[idx] = weights[idx]/s
+        mean = dict()
+        mini = dict()
+        maxi = dict()
+        mean['statName'] = appendStr+"Mean"
+        mini['statName'] = appendStr+"Min"
+        maxi['statName'] = appendStr+"Max"
+        for key in keys:
+            mean[key] = np.sum([list_of_params[idx][key]*weights[idx] for idx in list_of_indexes])
+            mini[key] = np.min([list_of_params[idx][key] for idx in list_of_indexes])
+            maxi[key] = np.max([list_of_params[idx][key] for idx in list_of_indexes])
+            
+        return [mean, mini, maxi]
+
+    
+    def get_statistics_of_params(self, output_file_location = None):
+        sortedLossIndexes =[item[0] for item in sorted(self.losses.items(), key = lambda kv:(kv[1], kv[0]))]
+        
+        statsList = []
+        
+        statsList.extend(self._get_statistics_given_indexes(sortedLossIndexes[:10], "top10_"))
+        statsList.extend(self._get_statistics_given_indexes(sortedLossIndexes[:50], "top50_"))
+        statsList.extend(self._get_statistics_given_indexes(sortedLossIndexes, "all_"))
+        statsDF = pd.DataFrame(columns = list(statsList[0].keys()))
+        for s in statsList:
+            statsDF = statsDF.append(s, ignore_index=True)
+            
+        if output_file_location is not None:
+            statsDF.to_csv(output_file_location)
+        return statsDF
+        
+        
     
     def predict_from_mean_param(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, start_date: str,
                 end_date: str, **kwargs):
         mean_params = self.get_mean_params()
         mean_param_model = model_factory_alias.ModelFactory.get_model(self.child_model_class, mean_params)
-        print(run_day, start_date, end_date, "Inside Ensemble")
-        print(mean_params)
         prediction_df = mean_param_model.predict(region_metadata, region_observations, run_day, start_date, end_date)
         return prediction_df
           
@@ -151,10 +227,7 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
         
     def train_for_ensemble(self, region_metadata, region_observations, train_start_date, train_end_date, search_space,
                            search_parameters, train_loss_function):
-
-        child_model_parameters = self.model_parameters['child_model']['model_parameters']   
-        
-        child_model = model_factory_alias.ModelFactory.get_model(self.child_model_class, child_model_parameters)
+        child_model = model_factory_alias.ModelFactory.get_model(self.child_model_class, self.child_model_parameters)
         if child_model.is_black_box():
             objective = partial(child_model.optimize, region_metadata=region_metadata, region_observations=region_observations,
                                 train_start_date=train_start_date,
@@ -169,17 +242,19 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             constituent_model_losses = dict()
             for i in range(len(result_list)):
                 result = result_list[i]
-                model_params = copy.deepcopy(child_model_parameters)
+                model_params = copy.deepcopy(self.child_model_parameters)
                 model_params.update(result[0]) 
                 latent_params = child_model.get_latent_params(region_metadata, region_observations, run_day,
                                                               train_end_date, model_params)
                 model_params.update(latent_params["latent_params"])
                 tempDict = dict()
-                tempDict['model_class'] = self.child_model_class
+                tempDict['model_class'] = self.child_model_class.name
                 tempDict['model_parameters'] = model_params
                 constituent_models[str(i)] = tempDict
-                constituent_model_losses[str(i)] = result[1]   
+                constituent_model_losses[str(i)] = result[1]
+
         self.model_parameters.update({"constituent_models": constituent_models, "constituent_model_losses": constituent_model_losses})
+
         return {"model_parameters": self.model_parameters}
     
     def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,
@@ -204,8 +279,11 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
             train1_end_date = (datetime.strptime(train_start_date, "%m/%d/%y") + timedelta(days=ndays * float(search_parameters['frac_for_child']))).strftime("%-m/%-d/%y")
             self.train_for_ensemble(region_metadata, region_observations, train_start_date,
               train1_end_date, search_space, search_parameters["child_model"], train_loss_function)
-            self.models = copy.deepcopy(self.model_parameters['constituent_models'])
-            self.losses = copy.deepcopy(self.model_parameters['constituent_model_losses'])
+
+            self.models = {k: v for k, v in self.model_parameters['constituent_models'].items() if
+                           int(k) < self.model_parameters["n"]}
+            self.losses = {k: v for k, v in self.model_parameters['constituent_model_losses'].items() if
+                           int(k) < self.model_parameters["n"]}
 
             if 'constituent_model_weights' in self.model_parameters:
                 self.weights = copy.deepcopy(self.model_parameters['constituent_model_weights'])
@@ -219,7 +297,8 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
                 self.models[idx] = model_factory_alias.ModelFactory.get_model(
                     constituent_model_class, constituent_model_parameters)
 
-            resultsBeta = super().train(region_metadata, region_observations, train_start_date,
+            train2_start_date = (datetime.strptime(train1_end_date, "%m/%d/%y") + timedelta(1)).strftime("%-m/%-d/%y")
+            resultsBeta = super().train(region_metadata, region_observations, train2_start_date,
               train_end_date, onlyBetaSearchSpace, search_parameters["ensemble_model"], train_loss_function)
             self.model_parameters.update(resultsBeta['model_parameters'])
             return {"model_parameters": self.model_parameters}
@@ -240,6 +319,9 @@ class HomogeneousEnsemble(HeterogeneousEnsemble):
              
         elif(self.model_parameters['modes']['predict_mode'] == 'mean_params'):
             return self.predict_from_mean_param(region_metadata, region_observations, run_day, start_date, end_date)
+        
+        elif(self.model_parameters['modes']['predict_mode'] == 'best_fit'):
+            return super().predict_best_fit(region_metadata, region_observations, run_day, start_date, end_date)
         
         else:
              raise Exception("Invalid Predict Mode")

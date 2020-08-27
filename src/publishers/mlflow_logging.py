@@ -6,19 +6,15 @@ import pandas as pd
 TRACKING_URL = "http://ec2-54-175-207-176.compute-1.amazonaws.com"
 
 
-def log_to_mlflow(params, metrics, artifact_dir, artifacts, experiment_name="default", run_name=None):
+def log_to_mlflow(params, metrics, artifact_dict, experiment_name="default", run_name=None):
     """Logs metrics, parameters and artifacts to MLflow
 
     Args:
         params (dict of {str: str}): input parameters to the model
         metrics (dict of {str: numeric}): metrics output from the model
-        artifact_dir (str): local directory in which artifacts are stored
-        artifacts (list[str]): list of files to be logged
+        artifact_dict (dict): file paths of artifacts
         experiment_name (str): name of the MLflow experiment (default: "default")
         run_name (str): name of the MLflow run (default: None)
-
-    Assumptions:
-        The params and metrics dicts are flattened out (no nesting)
 
     """
 
@@ -28,8 +24,8 @@ def log_to_mlflow(params, metrics, artifact_dir, artifacts, experiment_name="def
     with mlflow.start_run(run_name=run_name):
         mlflow.log_params(params)
         mlflow.log_metrics(metrics)
-        for artifact in artifacts:
-            mlflow.log_artifact(artifact_dir + artifact)
+        for artifact, path in artifact_dict.items():
+            mlflow.log_artifact(path)
 
 
 def get_previous_runs(experiment_name, region, interval=0):
@@ -43,6 +39,7 @@ def get_previous_runs(experiment_name, region, interval=0):
     Returns:
         pd.DataFrame: links to relevant runs
     """
+    # TODO: Check for status failed
 
     start_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(interval)
     start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -56,12 +53,16 @@ def get_previous_runs(experiment_name, region, interval=0):
     query = "params.region = '{}'".format(region)
     runs_df = mlflow.search_runs(experiment_ids=experiment_id, filter_string=query)
 
+    if runs_df.empty:
+        return pd.DataFrame()
+
     runs_df = runs_df[runs_df['start_time'] >= start_date]
     run_ids = runs_df['run_id']
 
     links = ["/".join([prefix, run_id]) for run_id in run_ids]
-    links_df = pd.DataFrame({'published on': runs_df['start_time'], 'link to run': links})
-    links_df['published on'] = links_df['published on'].apply(lambda x: x.date())
+    links_df = pd.DataFrame(
+        {'Published on': runs_df['start_time'], 'Run name': runs_df['tags.mlflow.runName'], 'Link to run': links})
+    links_df['Published on'] = links_df['Published on'].apply(lambda x: x.date())
     links_df.index += 1
 
     return links_df
