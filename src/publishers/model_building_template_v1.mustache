@@ -1,0 +1,117 @@
+# Model Building  Detailed Report -  {{params_region_type}} - {{params_region_name}}  
+
+## Training, Evaluation and Forecast Set up
+
+### Data Source
+
+{{params_data_source}} - [{{params_input_file_path}}]({{params_input_file_path}})
+
+### Time Intervals for Training, Evaluation and Forecast
+```yaml
+{{params_time_interval_config}}
+```
+### Training Configuration 
+
+Model Class: {{params_model_class}}
+
+Search Configuration:
+
+```yaml
+{{params_search_parameters}}
+```
+
+```yaml
+{{params_param_search_space_config}}
+```
+Training Loss Function: 
+```yaml
+{{params_train_loss_function}}
+```
+Evaluation Loss Function: 
+```yaml
+{{params_eval_loss_functions}}
+```
+
+## Training and Evaluation - Model M1 Results
+
+Parameter values and ranges: 
+
+{{artifact_list_M1_param_ranges}}
+
+Beta: {{metrics_M1_beta}}
+
+Plots:
+
+![Round 1 - Training and Evaluation Plot]({{artifact_list_plot_M1_CARD}})
+
+![Round 1 - Training and Evaluation Plot - Confirmed ]({{artifact_list_plot_M1_single_confirmed}})
+
+![Round 1 - Training and Evaluation Plot - Active ]({{artifact_list_plot_M1_single_hospitalized}})
+
+![Round 1 - Training and Evaluation Plot - Recovered ]({{artifact_list_plot_M1_single_recovered}})
+
+![Round 1 - Training and Evaluation Plot - Deceased ]({{artifact_list_plot_M1_single_deceased}})
+
+Loss values:
+
+{{metrics_M1_losses}}
+
+## Training and Evaluation - Model M2 Results
+
+Parameter values and ranges:
+
+{{artifact_list_M2_param_ranges}}
+
+Beta: {{metrics_M2_beta}}
+
+Plots:
+
+![Round 2 - Training Plot]({{artifact_list_plot_M2_CARD}})
+
+![Round 2 - Training Plot - Confirmed ]({{artifact_list_plot_M2_single_confirmed}})
+
+![Round 2 - Training Plot - Active ]({{artifact_list_plot_M2_single_hospitalized}})
+
+![Round 2- Training Plot - Recovered ]({{artifact_list_plot_M2_single_recovered}})
+
+![Round 2- Training Plot - Deceased ]({{artifact_list_plot_M2_single_deceased}})
+
+Loss values:
+
+{{metrics_M2_losses}}
+
+Representative trials for various percentiles:
+
+{{artifact_list_M2_percentile_params}}
+
+Forecasts:
+
+![Round 2 - Forecast Plot]({{artifact_list_plot_M2_forecast_CARD}})
+
+![Round 2 - Forecast Plot - Confirmed ]({{artifact_list_plot_M2_forecast_single_confirmed}})
+
+![Round 2 - Forecast Plot - Active ]({{artifact_list_plot_M2_forecast_single_hospitalized}})
+
+![Round 2- Forecast Plot - Recovered ]({{artifact_list_plot_M2_forecast_single_recovered}})
+
+![Round 2- Forecast Plot - Deceased ]({{artifact_list_plot_M2_forecast_single_deceased}})
+
+## Planning  Forecast
+
+* Planning Uncertainty Config:
+```yaml
+{{params_uncertainty_parameters}}
+```
+
+![Planning Date Forecast Distribution ]({{artifact_list_plot_planning_pdf_cdf}})
+
+## Main Forecast Output
+
+Forecast CSV file: [Forecast csv]({{artifact_list_output_forecast_file}})
+
+## Additional Artifacts 
+
+* M1 Ensemble model: [{{artifact_list_M1_model}}]({{artifact_list_M1_model}})
+* M1 Beta exploration: [{{artifact_list_M1_beta_trials}}]({{artifact_list_M1_beta_trials}})
+* M2 Ensemble model: [{{artifact_list_M2_model}}]({{artifact_list_M2_model}})
+* M2 Beta exploration: [{{artifact_list_M2_beta_trials}}]({{artifact_list_M2_beta_trials}})

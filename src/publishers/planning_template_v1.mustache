@@ -1,0 +1,52 @@
+# Planning Report -  {{params_region_type}} - {{params_region_name}}  
+
+
+## Planning Set up
+
+* Planning Uncertainty Config: 
+```yaml
+{{params_uncertainty_parameters}}
+```
+
+* What if  Scenarios:
+```yaml
+{{params_planning}}
+```
+
+##  Model Parameters
+
+* Planning Level Model:
+[{{artifact_list_M2_planning_model_params}}]({{artifact_list_M2_planning_model_params}})
+
+##  Planning Forecast
+  
+![Planning Forecast Plot]({{artifact_list_plot_M2_planning_CARD}})
+
+
+### Staffing Matrix
+
+[{{artifact_list_staffing_planning}}]({{artifact_list_staffing_planning}})
+
+
+##  What-if Scenario Forecasts
+
+What if  Scenarios - R0: {{M2_scenarios_r0}}
+
+![Planning Scenario 1 Forecast Plot]({{artifact_list_plot_M2_scenario_1_CARD}})
+
+![Planning Scenario 2 Forecast Plot]({{artifact_list_plot_M2_scenario_2_CARD}})
+
+![Planning Scenario 3 Forecast Plot]({{artifact_list_plot_M2_scenario_3_CARD}})
+
+###  Staffing Matrices
+
+[{{artifact_list_staffing_scenario_1}}]({{artifact_list_staffing_scenario_1}})
+
+[{{artifact_list_staffing_scenario_2}}]({{artifact_list_staffing_scenario_2}})
+
+[{{artifact_list_staffing_scenario_3}}]({{artifact_list_staffing_scenario_3}})
+
+
+## Main Forecast Output
+
+Forecast CSV file: [{{artifact_list_M2_planning_output_forecast_file}}]({{artifact_list_M2_planning_output_forecast_file}})

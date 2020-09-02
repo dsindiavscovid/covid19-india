@@ -1,25 +1,25 @@
-from entities.data_source import DataSource
-from data_fetchers.data_fetcher_base import DataFetcherBase
-
 import copy
-import numpy as np
-import pandas as pd
-
 from pathlib import Path
 
+import pandas as pd
+from data_fetchers.data_fetcher_base import DataFetcherBase
 from pyathena import connect
 from pyathena.pandas_cursor import PandasCursor
 
+SCHEMA_NAME = 'wiai-covid-data'
+
+
 def create_connection(pyathena_rc_path=None):
     """Creates SQL Server connection using AWS Athena credentials
-    Keyword Arguments:
-        pyathena_rc_path {str} -- [Path to the PyAthena RC file with the AWS Athena variables] (default: {None})
+
+    Args:
+        pyathena_rc_path (str): Path to the PyAthena RC file with the AWS Athena variables (default: None)
+
     Returns:
-        [cursor] -- [Connection Cursor]
+        Connection Cursor
     """
-    if pyathena_rc_path == None:
-        pyathena_rc_path = Path(__file__).parent / "../../../../pyathena/pyathena.rc"
-    SCHEMA_NAME = 'wiai-covid-data'
+    if pyathena_rc_path is None:
+        pyathena_rc_path = Path(__file__).parent / "../../../pyathena/pyathena.rc"
 
     # Open Pyathena RC file and get list of all connection variables in a processable format
     with open(pyathena_rc_path) as f:
@@ -44,66 +44,70 @@ def create_connection(pyathena_rc_path=None):
                      schema_name=SCHEMA_NAME).cursor(PandasCursor)
     return cursor
 
+
 def get_athena_dataframes(pyathena_rc_path=None):
-    """Creates connection to Athena database and returns all the tables there as a dict of Pandas dataframes
-    Keyword Arguments:
-        pyathena_rc_path {str} -- Path to the PyAthena RC file with the AWS Athena variables 
-        (default: {None})
+    """Creates connection to Athena database and returns all the tables there as a dict of Pandas data frames
+
+    Args:
+        pyathena_rc_path (str): Path to the PyAthena RC file with the AWS Athena variables (default: None)
+
     Returns:
-        dict -- dict where key is str and value is pd.DataFrame
-        The dataframes : 
-        covid_case_summary
-        demographics_details
-        healthcare_capacity
-        testing_summary
+        dict: dict where key is str and value is pd.DataFrame
+            The data frames :
+            covid_case_summary
+            demographics_details
+            healthcare_capacity
+            testing_summary
     """
-    if pyathena_rc_path == None:
-        pyathena_rc_path = Path(__file__).parent / "../../../../pyathena/pyathena.rc"
+    if pyathena_rc_path is None:
+        pyathena_rc_path = Path(__file__).parent / "../../../pyathena/pyathena.rc"
 
     # Create connection
     cursor = create_connection(pyathena_rc_path)
 
-    # Run SQL SELECT queries to get all the tables in the database as pandas dataframes
-    dataframes = {}
-    tables_list = cursor.execute('Show tables').as_pandas().to_numpy().reshape(-1, )
+    # Run SQL SELECT queries to get all the tables in the database as pandas data frames
+    data_frames = {}
+    tables_list = ['covid_case_summary', 'new_covid_case_summary', 'testing_summary']
     for table in tables_list:
-        dataframes[table] = cursor.execute(
+        data_frames[table] = cursor.execute(
             'SELECT * FROM {}'.format(table)).as_pandas()
-    
-    return dataframes
+
+    return data_frames
+
 
 def get_data_from_db(district):
-    dataframes = get_athena_dataframes()
-    df_result = copy.copy(dataframes['covid_case_summary'])
+    """Gets data frame of case counts for one district
+
+    Args:
+        district (str): name of district
+
+    Returns:
+        pd.DataFrame: data frame of case counts
+    """
+    data_frames = get_athena_dataframes()
+    df_result = copy.copy(data_frames['new_covid_case_summary'])
     df_result = df_result[df_result['district'] == district.lower()]
-    df_result = df_result.dropna(subset=['date'])
-    df_result['date'] = pd.to_datetime(df_result['date']).apply(lambda x: x.strftime("%-m/%-d/%y"))
-
-    del df_result['state']
-    del df_result['district']
-    del df_result['ward_name']
-    del df_result['ward_no']
-    del df_result['mild']
-    del df_result['moderate']
-    del df_result['severe']
-    del df_result['critical']
-    del df_result['partition_0']
-
-    df_result.columns = [x if x != 'active' else 'hospitalized' for x in df_result.columns]
-    df_result.columns = [x if x != 'total' else 'confirmed' for x in df_result.columns]
+    df_result = df_result.loc[:, :'deceased']
+    df_result.dropna(axis=0, how='any', inplace=True)
+    df_result['date'] = pd.to_datetime(df_result['date'])
+    df_result['date'] = df_result['date'].apply(lambda x: x.strftime("%-m/%-d/%y"))
+    df_result.rename({'total': 'confirmed', 'active': 'hospitalized'}, axis='columns', inplace=True)
+    for col in df_result.columns:
+        if col in ['hospitalized', 'confirmed', 'recovered', 'deceased']:
+            df_result[col] = df_result[col].astype('int64')
     df_result = df_result.fillna(0)
-
-    df_result = df_result.rename(columns={'date':'index'})
-    df_result = df_result.set_index('index').transpose().reset_index().rename(columns={'index':"observation"})
-    df_result.insert(0, column = "region_name", value = district.lower().replace(',', ''))
-    df_result.insert(1, column = "region_type", value = "district")
+    df_result = df_result.rename(columns={'date': 'index'})
+    df_result.drop(['state', 'district'], axis=1, inplace=True)
+    df_result = df_result.set_index('index').transpose().reset_index().rename(columns={'index': "observation"})
+    df_result.insert(0, column="region_name", value=district.lower().replace(',', ''))
+    df_result.insert(1, column="region_type", value="district")
 
     return df_result
 
 
 class OfficialData(DataFetcherBase):
 
-    def get_observations_for_single_region(self, region_type, region_name):
+    def get_observations_for_single_region(self, region_type, region_name, filepath=None):
         if region_type != 'district':
             raise NotImplementedError
         return get_data_from_db(region_name)

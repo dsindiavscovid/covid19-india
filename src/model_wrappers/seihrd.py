@@ -1,22 +1,24 @@
 from datetime import timedelta, datetime
-from functools import reduce
-
-from entities.forecast_variables import ForecastVariable
-from model_wrappers.base import ModelWrapperBase
+from functools import reduce, partial
 
 import numpy as np
 import pandas as pd
-
+from entities.forecast_variables import ForecastVariable
+from entities.loss_function import LossFunction
+from hyperopt import hp
+from model_wrappers.base import ModelWrapperBase
 from seirsplus.models import *
+from utils.hyperparam_util import hyperparam_tuning
+from utils.metrics_util import evaluate_for_forecast
 
 
 class SEIHRD(ModelWrapperBase):
 
-    def fit(self):
-        pass
-
     def __init__(self, model_parameters: dict):
         self.model_parameters = model_parameters
+
+    def fit(self):
+        pass
 
     def supported_forecast_variables(self):
         return [ForecastVariable.confirmed, ForecastVariable.recovered, ForecastVariable.active]
@@ -34,6 +36,39 @@ class SEIHRD(ModelWrapperBase):
 
     def is_black_box(self):
         return True
+
+    def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,
+              train_end_date: str, search_space: dict, search_parameters: dict, train_loss_function: LossFunction):
+        result = {}
+        if self.is_black_box():
+            run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime(
+                "%-m/%-d/%y")
+            objective = partial(self.optimize, region_metadata=region_metadata, region_observations=region_observations,
+                                train_start_date=train_start_date, train_end_date=train_end_date,
+                                loss_function=train_loss_function)
+            for k, v in search_space.items():
+                search_space[k] = hp.uniform(k, v["low"], v["high"])
+            result = hyperparam_tuning(objective, search_space,
+                                       search_parameters.get("max_evals", 100))
+            latent_params = self.get_latent_params(region_metadata, region_observations, run_day,
+                                                   train_end_date, result["best_params"])
+            result.update(latent_params)
+
+        model_params = self.model_parameters
+        model_params.update(latent_params["latent_params"])
+        model_params.update(result["best_params"])
+        model_params["MAPE"] = result["best_loss"]
+        result["model_parameters"] = model_params
+        return {"model_parameters": model_params}
+
+    def optimize(self, search_space, region_metadata, region_observations, train_start_date, train_end_date,
+                 loss_function):
+        run_day = (datetime.strptime(train_start_date, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
+        predict_df = self.predict(region_metadata, region_observations, run_day, train_start_date,
+                                  train_end_date,
+                                  search_space=search_space, is_tuning=True)
+        metrics_result = evaluate_for_forecast(region_observations, predict_df, [loss_function])
+        return metrics_result[0]["value"]
 
     def get_latent_params(self, region_metadata: dict, region_observations: pd.DataFrame, run_day: str, end_date: str,
                           search_space: dict = {}):
@@ -66,27 +101,27 @@ class SEIHRD(ModelWrapperBase):
         deceased_dataset = \
             region_observations[region_observations.observation == ForecastVariable.deceased.name].iloc[0]
         hospitalized_dataset = \
-            region_observations[region_observations.observation == ForecastVariable.hospitalized.name].iloc[0]       
+            region_observations[region_observations.observation == ForecastVariable.hospitalized.name].iloc[0]
         initN = region_metadata.get("population")
-        
+
         if self._is_tuning:
             initE = confirmed_dataset[run_day] * self.model_parameters.get('EbyCRatio')
             initI = confirmed_dataset[run_day] * self.model_parameters.get('IbyCRatio')
-            #initR = confirmed_dataset[run_day] * (1 - self.model_parameters.get('IbyCRatio'))
+            # initR = confirmed_dataset[run_day] * (1 - self.model_parameters.get('IbyCRatio'))
             initR = confirmed_dataset[run_day]
             initH = hospitalized_dataset[run_day]
             initF = recovered_dataset[run_day] + deceased_dataset[run_day]
         else:
             pick_day = run_day
-            while (not pick_day in self.model_parameters.get('LatentEbyCRatio')):
+            while pick_day not in self.model_parameters.get('LatentEbyCRatio'):
                 pick_day = (datetime.strptime(pick_day, "%m/%d/%y") - timedelta(days=1)).strftime("%-m/%-d/%y")
             initE = confirmed_dataset[run_day] * self.model_parameters.get('LatentEbyCRatio').get(pick_day)
             initI = confirmed_dataset[run_day] * self.model_parameters.get('LatentIbyCRatio').get(pick_day)
-            #initR = confirmed_dataset[run_day] * (1 - self.model_parameters.get('LatentIbyCRatio').get(pick_day))
+            # initR = confirmed_dataset[run_day] * (1 - self.model_parameters.get('LatentIbyCRatio').get(pick_day))
             initR = confirmed_dataset[run_day]
             initH = hospitalized_dataset[run_day]
             initF = recovered_dataset[run_day] + deceased_dataset[run_day]
-      
+
         estimator = SEIRSModel(beta=init_beta, sigma=init_sigma, gamma=init_gamma, initN=initN, initI=initI,
                                initE=initE, initR=initR)
         estimator.run(T=n_days, verbose=False)
@@ -100,20 +135,28 @@ class SEIHRD(ModelWrapperBase):
         numH[0] = initH
 
         for i in range(1, num_steps):
-            numF[i] = numF[i-1] + self.model_parameters["F_hospitalization"] * numH[i-1]
+            numF[i] = numF[i - 1] + self.model_parameters["F_hospitalization"] * numH[i - 1]
             numH[i] = estimator.numR[i] - numF[i]
 
-        recovered_ts = self.alignTimeSeries(numF*(1 - self.model_parameters["F_fatalities"]), estimator.tseries, run_day, n_days, ForecastVariable.recovered.name)
-        fatalities_ts = self.alignTimeSeries(numF*self.model_parameters["F_fatalities"], estimator.tseries, run_day, n_days, ForecastVariable.deceased.name)
-        hospitalized_ts = self.alignTimeSeries(numH, estimator.tseries, run_day, n_days, ForecastVariable.hospitalized.name)
-        icu_ts = self.alignTimeSeries(numH*self.model_parameters["F_icu"], estimator.tseries, run_day, n_days, ForecastVariable.icu.name)
+        recovered_ts = self.alignTimeSeries(numF * (1 - self.model_parameters["F_fatalities"]), estimator.tseries,
+                                            run_day, n_days, ForecastVariable.recovered.name)
+        fatalities_ts = self.alignTimeSeries(numF * self.model_parameters["F_fatalities"], estimator.tseries, run_day,
+                                             n_days, ForecastVariable.deceased.name)
+        hospitalized_ts = self.alignTimeSeries(numH, estimator.tseries, run_day, n_days,
+                                               ForecastVariable.hospitalized.name)
+        icu_ts = self.alignTimeSeries(numH * self.model_parameters["F_icu"], estimator.tseries, run_day, n_days,
+                                      ForecastVariable.icu.name)
         active_ts = self.alignTimeSeries(numH, estimator.tseries, run_day, n_days, ForecastVariable.active.name)
-        confirmed_ts = self.alignTimeSeries(numH + numF, estimator.tseries, run_day, n_days, ForecastVariable.confirmed.name)
-        exposed_ts = self.alignTimeSeries(estimator.numE, estimator.tseries, run_day, n_days, ForecastVariable.exposed.name)
-        infected_ts = self.alignTimeSeries(estimator.numI, estimator.tseries, run_day, n_days, ForecastVariable.infected.name)
+        confirmed_ts = self.alignTimeSeries(numH + numF, estimator.tseries, run_day, n_days,
+                                            ForecastVariable.confirmed.name)
+        exposed_ts = self.alignTimeSeries(estimator.numE, estimator.tseries, run_day, n_days,
+                                          ForecastVariable.exposed.name)
+        infected_ts = self.alignTimeSeries(estimator.numI, estimator.tseries, run_day, n_days,
+                                           ForecastVariable.infected.name)
         final_ts = self.alignTimeSeries(numF, estimator.tseries, run_day, n_days, ForecastVariable.final.name)
 
-        data_frames = [exposed_ts, icu_ts, recovered_ts, fatalities_ts, confirmed_ts, hospitalized_ts, active_ts, infected_ts, final_ts]
+        data_frames = [exposed_ts, icu_ts, recovered_ts, fatalities_ts, confirmed_ts, hospitalized_ts, active_ts,
+                       infected_ts, final_ts]
         result = reduce(lambda left, right: pd.merge(left, right, on=['date'], how='inner'), data_frames)
         result = result.dropna()
         return result
@@ -125,9 +168,9 @@ class SEIHRD(ModelWrapperBase):
         day0 = dates[0]
         for date in dates:
             t = (date - day0).days
-            while (modelT[count] <= t):
+            while modelT[count] <= t:
                 count += 1
-                if (count == len(modelT)):
+                if count == len(modelT):
                     print("Last prediction reached - Number of predictions less than required")
                     model_predictions.append(modelI[count - 1])
                     model_predictions_df = pd.DataFrame()

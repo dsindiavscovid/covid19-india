@@ -1,19 +1,23 @@
-from entities.data_source import DataSource
+from datetime import datetime
+from functools import lru_cache
+
+import numpy as np
+import pandas as pd
 from data_fetchers.data_fetcher_base import DataFetcherBase
 from data_fetchers.data_fetcher_utils import get_raw_data_dict
 
-import json
-import pandas as pd
-import numpy as np
-import urllib.request
-from datetime import datetime
-from io import StringIO  ## for Python 3
-from functools import lru_cache
-
-# raw input data from cocvid19india.org
-raw_data_url = "https://api.covid19india.org/raw_data.json"
+# Raw input data urls from covid19india.org
 raw_data_urls = ["https://api.covid19india.org/raw_data1.json", "https://api.covid19india.org/raw_data2.json"]
-post_april27_url = "https://api.covid19india.org/raw_data3.json"
+post_april27_urls = ["https://api.covid19india.org/raw_data3.json",
+                     "https://api.covid19india.org/raw_data4.json",
+                     "https://api.covid19india.org/raw_data5.json",
+                     "https://api.covid19india.org/raw_data6.json",
+                     "https://api.covid19india.org/raw_data7.json",
+                     "https://api.covid19india.org/raw_data8.json",
+                     "https://api.covid19india.org/raw_data9.json",
+                     "https://api.covid19india.org/raw_data10.json",
+                     "https://api.covid19india.org/raw_data11.json",
+                     "https://api.covid19india.org/raw_data12.json"]
 
 INPUT_STATE_FIELD = "detectedstate"
 INPUT_DISTRICT_FIELD = "detecteddistrict"
@@ -22,7 +26,7 @@ INPUT_DATE_ANNOUNCED_FIELD = "dateannounced"
 INPUT_STATUS_CHANGE_DATE_FIELD = "statuschangedate"
 NUM_CASES = 'numcases'
 
-# column headers and static strings used in output CSV
+# Column headers and static strings used in output CSV
 REGION_TYPE = "region_type"
 REGION_NAME = "region_name"
 STATE = "state"
@@ -35,12 +39,20 @@ RECOVERED = "recovered"
 HOSPITALIZED = "hospitalized"
 ACTIVE = "active"
 
+
 @lru_cache(maxsize=3)
 def load_observations_data():
+    """Returns data frame of region-wise case counts from covid19india.org raw_data API
+
+    Returns:
+        pd.DataFrame: region-wise daily cumulative case counts
+    """
     raw_data = []
     for url in raw_data_urls:
         raw_data.extend(get_raw_data_dict(url)["raw_data"])
-        raw_data_post_april27 = get_raw_data_dict(post_april27_url)["raw_data"]
+        raw_data_post_april27 = []
+        for new_url in post_april27_urls:
+            raw_data_post_april27.extend(get_raw_data_dict(new_url)["raw_data"])
         df_list = []
         for region in [(INPUT_DISTRICT_FIELD, DISTRICT), (INPUT_CITY_FIELD, CITY), (INPUT_STATE_FIELD, STATE)]:
             for variable in [CONFIRMED, HOSPITALIZED, RECOVERED, DECEASED]:
@@ -50,6 +62,7 @@ def load_observations_data():
         merged_df.reset_index(inplace=True)
         merged_df.to_csv("observations_latest.csv", index=False)
         return merged_df
+
 
 def _get_covid_ts(stats, stats_post27_april, input_region_field, output_region_type_field, variable):
     if variable == CONFIRMED:
@@ -83,9 +96,10 @@ def _get_covid_ts(stats, stats_post27_april, input_region_field, output_region_t
         df_final = df_final.rename(columns={date_val: datenew})
     return df_final
 
+
 class TrackerRaw(DataFetcherBase):
 
-    def get_observations_for_single_region(self, region_type, region_name):
+    def get_observations_for_single_region(self, region_type, region_name, filepath=None):
         observations_df = load_observations_data()
         region_df = observations_df[
             (observations_df["region_name"] == region_name) & (observations_df["region_type"] == region_type)]

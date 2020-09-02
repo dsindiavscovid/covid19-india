@@ -1,0 +1,36 @@
+{
+	"data_source": "tracker_district_daily",
+	"region_name": [],
+	"region_type": "",
+    "run_day": "",
+	"forecast_start_date": "",
+	"forecast_end_date": "",
+	"model_class": "homogeneous_ensemble",
+	"model_parameters": {
+        "child_model":{
+            "model_class": "SEIHRD",
+            "model_parameters": {
+                "incubation_period": 5,
+                "F_icu" : 0.05
+             }
+        },
+        "modes":{
+            "training_mode": "constituent_models",
+            "predict_mode": "predictions_with_uncertainty"
+        },
+        "constituent_models": {},
+      "constituent_model_losses": {},
+      "beta": 0.0,
+      "uncertainty_parameters":{
+         "include_mean": "True",
+         "date_of_interest": "",
+         "column_of_interest": "confirmed",
+         "percentiles": [10, 20, 30, 40, 50, 60, 70, 80, 90],
+         "ci": [95, 99],
+         "tolerance": 1,
+         "param_key_of_interest": "r0"
+       }
+	},
+    "input_filepath": "",
+    "output_dir": ""
+}

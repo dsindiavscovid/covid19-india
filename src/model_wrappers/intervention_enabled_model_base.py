@@ -1,10 +1,9 @@
-from collections import defaultdict
+import abc
 
 import pandas as pd
-
 from entities.intervention_variable import InterventionVariable, InputType
+from entities.loss_function import LossFunction
 from model_wrappers.base import ModelWrapperBase
-import abc
 
 
 class InterventionEnabledModelBase(ModelWrapperBase):
@@ -122,6 +121,11 @@ class InterventionEnabledModelBase(ModelWrapperBase):
 
     def is_black_box(self):
         return self.get_base_model().is_black_box()
+
+    def train(self, region_metadata: dict, region_observations: pd.DataFrame, train_start_date: str,
+              train_end_date: str, search_space: dict, search_parameters: dict, train_loss_function: LossFunction):
+        return self.get_base_model().train(region_metadata, region_observations, train_end_date, train_end_date,
+                                           search_space, search_parameters, train_loss_function)
 
     def predict_for_scenario(self, input_type: InputType, interventions_map: dict, region_metadata: dict,
                              region_observations: pd.DataFrame, run_day: str, start_date: str,
