@@ -97,8 +97,8 @@ class SEIR(ModelWrapperBase):
     def run(self, region_observations: pd.DataFrame, region_metadata, run_day: str, n_days: int):
         r0 = self.model_parameters['r0']
         init_sigma = 1. / self.model_parameters['incubation_period']
-        init_beta = r0 * init_sigma
         init_gamma = 1. / self.model_parameters['infectious_period']
+        init_beta = r0 * init_gamma
         confirmed_dataset = \
             region_observations[region_observations.observation == ForecastVariable.confirmed.name].iloc[0]
         initN = region_metadata.get("population")

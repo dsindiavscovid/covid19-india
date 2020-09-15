@@ -149,8 +149,8 @@ class SEIHRD_gen(ModelWrapperBase):
                               latent_on: ForecastVariable = ForecastVariable.confirmed):
         r0 = self.model_parameters['r0']
         init_sigma = 1. / self.model_parameters['incubation_period']
-        init_beta = r0 * init_sigma
         init_gamma = 1. / self.model_parameters['infectious_period']
+        init_beta = r0 * init_gamma
         init_alpha = 1. / self.model_parameters['recovery_period']
         init_delta = 1. / self.model_parameters['deceased_period']
         init_kappa = self.model_parameters['recovered_ratio']
