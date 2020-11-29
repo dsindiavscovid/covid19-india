@@ -1,0 +1,244 @@
+{
+  "output_artifacts": {
+    "cleaned_case_count_file": "case_count.csv",
+    "plot_case_count": "case_count_plot.png",
+    "plot_M1_CARD": "m1.png",
+    "plot_M1_single_hospitalized": "m1_hospitalized.png",
+    "plot_M1_single_confirmed": "m1_confirmed.png",
+    "plot_M1_single_deceased": "m1_deceased.png",
+    "plot_M1_single_recovered": "m1_recovered.png",
+    "M1_model_params": "m1_model_params.json",
+    "M1_model": "m1_model.json",
+    "M1_beta_trials": "m1_beta_trials.json",
+    "M1_param_ranges": "m1_param_ranges.csv",
+    "M1_train_config": "m1_train_config.json",
+    "M1_test_config": "m1_test_config.json",
+    "M2_full_output_forecast_file": "forecast.csv",
+    "plot_M2_CARD": "m2.png",
+    "plot_M2_single_hospitalized": "m2_hospitalized.png",
+    "plot_M2_single_confirmed": "m2_confirmed.png",
+    "plot_M2_single_deceased": "m2_deceased.png",
+    "plot_M2_single_recovered": "m2_recovered.png",
+    "plot_M2_forecast_CARD": "m2_forecast.png",
+    "plot_M2_forecast_single_hospitalized": "m2_forecast_hospitalized.png",
+    "plot_M2_forecast_single_confirmed": "m2_forecast_confirmed.png",
+    "plot_M2_forecast_single_deceased": "m2_forecast_deceased.png",
+    "plot_M2_forecast_single_recovered": "m2_forecast_recovered.png",
+    "M2_model_params": "m2_model_params.json",
+    "M2_model": "m2_model.json",
+    "M2_beta_trials": "m2_beta_trials.json",
+    "M2_param_ranges": "m2_param_ranges.csv",
+    "M2_percentile_params": "m2_percentile_params.csv",
+    "M2_train_config": "m2_train_config.json",
+    "M2_forecast_config": "m2_forecast_config.json",
+    "plot_planning_pdf_cdf": "m2_distribution.png",
+    "plot_M2_planning_CARD": "planning_level_default_m2_forecast.png",
+    "plot_M2_scenario_1_CARD": "planning_level_scenario_1_m2_forecast.png",
+    "plot_M2_scenario_2_CARD": "planning_level_scenario_2_m2_forecast.png",
+    "plot_M2_scenario_3_CARD": "planning_level_scenario_3_m2_forecast.png",
+    "M2_planning_model_params": "m2_planning_model_params.json",
+    "M2_planning_output_forecast_file": "planning_forecast.csv",
+    "staffing_planning": "staffing_planning.csv",
+    "staffing_scenario_1": "staffing_scenario_1.csv",
+    "staffing_scenario_2": "staffing_scenario_2.csv",
+    "staffing_scenario_3": "staffing_scenario_3.csv",
+    "session_log": "session_log.json",
+    "model_building_report": "model_building_report.md",
+    "planning_report": "planning_report.md"
+  },
+  "metrics": {
+    "M1_beta": 0,
+    "M1_losses": null,
+    "M2_beta": 0,
+    "M2_losses": null,
+    "M2_scenarios_r0": null
+  },
+  "params": {
+    "session_name": null,
+    "user_name": "guest",
+    "experiment_name": "SEIHRD_ENSEMBLE_V0",
+    "region_name": [],
+    "region_type": "district",
+    "data_source": "tracker_data_all",
+    "input_file_path": "input_case_count.csv",
+    "output_dir": "outputs/",
+    "interval_to_consider": 7,
+    "time_interval_config": {
+      "offset_based": {
+        "reference_day": null,
+        "train_period": 14,
+        "test_period": 7,
+        "forecast_period": 30,
+        "plot_buffer": 7
+      },
+      "direct": {
+        "forecast_end_date": null,
+        "forecast_run_day": null,
+        "forecast_start_date": null,
+        "test_end_date": null,
+        "test_run_day": null,
+        "test_start_date": null,
+        "train1_end_date": null,
+        "train1_run_day": null,
+        "train1_start_date": null,
+        "train2_end_date": null,
+        "train2_run_day": null,
+        "train2_start_date": null
+      }
+    },
+    "model_class": "homogeneous_ensemble",
+    "model_parameters": {
+      "child_model": {
+        "model_class": "SEIHRD_gen",
+        "model_parameters": {
+          "incubation_period": 5,
+          "latent_information": {
+            "latent_variables": [
+              "exposed",
+              "active"
+            ],
+            "latent_on": "confirmed"
+          }
+        }
+      },
+      "top_k_models_considered": 1000,
+      "modes": {
+        "training_mode": "full",
+        "predict_mode": "mean_predictions"
+      }
+    },
+    "train_loss_function": {
+      "metric_name": "mape",
+      "weights": {
+        "confirmed": 0.25,
+        "recovered": 0.25,
+        "deceased": 0.25,
+        "hospitalized": 0.25
+      }
+    },
+    "search_space": {
+      "active_ratio": {
+        "low": 0.001,
+        "high": 2
+      },
+      "beta": {
+        "low": 0,
+        "high": 15
+      },
+      "deceased_period": {
+        "low": 1,
+        "high": 15
+      },
+      "exposed_ratio": {
+        "low": 0.001,
+        "high": 10
+      },
+      "infectious_period": {
+        "low": 3,
+        "high": 10
+      },
+      "r0": {
+        "low": 0.7,
+        "high": 2
+      },
+      "recovered_ratio": {
+        "low": 0.7,
+        "high": 1
+      },
+      "recovery_period": {
+        "low": 1,
+        "high": 25
+      }
+    },
+    "search_parameters": {
+      "child_model": {
+        "max_evals": 1000
+      },
+      "ensemble_model": {
+        "max_evals": 100
+      },
+      "time_split_for_child_training": 0.5
+    },
+    "eval_loss_functions": [
+      {
+        "metric_name": "mape",
+        "weights": {
+          "confirmed": 1
+        }
+      },
+      {
+        "metric_name": "mape",
+        "weights": {
+          "recovered": 1
+        }
+      },
+      {
+        "metric_name": "mape",
+        "weights": {
+          "deceased": 1
+        }
+      },
+      {
+        "metric_name": "mape",
+        "weights": {
+          "hospitalized": 1
+        }
+      }
+    ],
+    "uncertainty_parameters": {
+      "confidence_interval_sizes": [
+        95,
+        99
+      ],
+      "variable_of_interest": "confirmed",
+      "date_of_interest": null,
+      "param_of_interest": "r0",
+      "include_mean": "True",
+      "percentiles": [
+        10,
+        50,
+        90
+      ],
+      "tolerance": 1
+    },
+    "planning": {
+      "ref_level": 80,
+      "rt_multiplier_list": [
+        0.9,
+        1.1,
+        1.2
+      ]
+    },
+    "staffing": {
+      "staffing_ratios_file": "staffing_ratios.csv",
+      "bed_multiplier_count": 100,
+      "bed_type_ratio": {
+        "CCC2": 0.65,
+        "DCH": 0.15,
+        "DCHC": 0.15,
+        "ICU": 0.05
+      }
+    },
+    "publish_flag": "True",
+    "comments": "",
+    "input_artifacts": [
+      "input_file_path",
+      "staffing.staffing_ratios_file"
+    ],
+    "artifacts_to_render": {
+      "M1_param_ranges": {
+        "file_format": "csv",
+        "data_format": "dataframe"
+      },
+      "M2_param_ranges": {
+        "file_format": "csv",
+        "data_format": "dataframe"
+      },
+      "M2_percentile_params": {
+        "file_format": "csv",
+        "data_format": "dataframe"
+      }
+    }
+  }
+}
+

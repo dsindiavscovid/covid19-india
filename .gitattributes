@@ -1,0 +1,10 @@
+data/input_observations.csv filter=lfs diff=lfs merge=lfs -text
+data/observations.csv filter=lfs diff=lfs merge=lfs -text
+data/observations_latest.csv filter=lfs diff=lfs merge=lfs -text
+data/population_data.csv filter=lfs diff=lfs merge=lfs -text
+data/regional_metadata.json filter=lfs diff=lfs merge=lfs -text
+outputs/ filter=lfs diff=lfs merge=lfs -text
+outputs/seir_forecast2.csv filter=lfs diff=lfs merge=lfs -text
+outputs/seir_forecast.csv filter=lfs diff=lfs merge=lfs -text
+outputs/seir_evaluation_output.json filter=lfs diff=lfs merge=lfs -text
+outputs/seir_train.json filter=lfs diff=lfs merge=lfs -text

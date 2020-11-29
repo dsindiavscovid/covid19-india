@@ -1,0 +1,114 @@
+{
+	"data_source": "tracker_district_daily",
+	"region_name": [],
+	"region_type": "",
+	"train_start_date": "",
+	"train_end_date": "",
+	"model_class": "homogeneous_ensemble",
+	"model_parameters": {
+        "child_model":{
+            "model_class": "SEIHRD_gen",
+            "model_parameters": {
+                "incubation_period": 5,
+                "latent_information":{
+                    "latent_variables": ["exposed", "active"],
+                    "latent_on": "confirmed"
+                }
+             }
+        },
+        "top_k_models_considered": 1000,
+        "modes":{
+            "training_mode": "constituent_models",
+            "predict_mode": "mean_predictions"
+        },
+        "uncertainty_parameters": {
+            "include_mean": "True",
+            "percentiles": [10, 50, 80, 90],
+            "confidence_interval_sizes": [],
+            "date_of_interest": "",
+            "variable_of_interest": "hospitalized",
+            "tolerance": 1
+        }
+	},
+	"search_space": {
+      "active_ratio": {
+        "low": 0.001,
+        "high": 2
+      },
+      "beta": {
+        "low": 0,
+        "high": 10
+      },
+      "deceased_period": {
+        "low": 1,
+        "high": 15
+      },
+      "exposed_ratio": {
+        "low": 0.001,
+        "high": 10
+      },
+      "infectious_period": {
+        "low": 3,
+        "high": 10
+      },
+      "r0": {
+        "low": 0.7,
+        "high": 2
+      },
+      "recovered_ratio": {
+        "low": 0.7,
+        "high": 1
+      },
+      "recovery_period": {
+        "low": 1,
+        "high": 25
+      }
+    },
+	"search_parameters": {
+        "child_model": {
+		"max_evals": 10
+        },
+        "ensemble_model":{
+		"max_evals": 10
+        },
+        "time_split_for_child_training": 0.5
+	},
+	"train_loss_function": {
+      "metric_name": "mape",
+      "weights": {
+        "confirmed": 0.25,
+        "recovered": 0.25,
+        "deceased": 0.25,
+        "hospitalized": 0.25
+      }
+    },
+	"eval_loss_functions": [
+      {
+        "metric_name": "mape",
+        "weights": {
+          "confirmed": 1
+        }
+      },
+      {
+        "metric_name": "mape",
+        "weights": {
+          "recovered": 1
+        }
+      },
+      {
+        "metric_name": "mape",
+        "weights": {
+          "deceased": 1
+        }
+      },
+      {
+        "metric_name": "mape",
+        "weights": {
+          "hospitalized": 1
+        }
+      }
+    ],
+	"output_filepath": "",
+	"output_dir": "",
+    "input_filepath": ""
+}

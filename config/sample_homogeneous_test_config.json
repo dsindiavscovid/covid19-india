@@ -1,0 +1,89 @@
+{
+    "data_source": "tracker_district_daily",
+    "region_name": [
+        "bengaluru urban"
+    ],
+    "region_type": "district",
+    "run_day": "",
+    "test_start_date": "",
+    "test_end_date": "",
+    "model_class": "homogeneous_ensemble",
+    "model_parameters": {
+        "child_model":{
+            "model_class": "SEIHRD_gen",
+            "model_parameters": {
+                "incubation_period": 5,
+                "F_icu" : 0.05
+             }
+        },
+        "modes": {
+            "predict_mode": "mean_predictions"
+        },
+        "constituent_models": {},
+        "constituent_model_losses": {},
+        "beta": 0.0,
+        "MAPE": 0.0
+    },
+    "loss_functions": [
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "confirmed",
+                    "weight": 0.25
+                },
+                {
+                    "variable": "recovered",
+                    "weight": 0.25
+                },
+                {
+                    "variable": "deceased",
+                    "weight": 0.25
+                },
+                {
+                    "variable": "hospitalized",
+                    "weight": 0.25
+                }
+            ]
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "confirmed",
+                    "weight": 1
+                }
+            ]
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "hospitalized",
+                    "weight": 1
+                }
+            ]
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "recovered",
+                    "weight": 1
+                }
+            ]
+        },
+        {
+            "metric_name": "mape",
+            "variable_weights": [
+                {
+                    "variable": "deceased",
+                    "weight": 1
+                }
+            ]
+        }
+    ],
+    "output_filepath": "",
+    "output_dir": "",
+    "input_filepath": ""
+}

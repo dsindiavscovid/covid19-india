@@ -1,0 +1,30 @@
+{
+  "region_name": ["bengaluru urban"],
+  "region_type": "district",
+  "run_day": "3/22/20",
+  "forecast_start_date": "4/1/20",
+  "forecast_end_date": "5/30/20",
+  "model_class": "SEIR",
+  "model_parameters": {
+    "EbyCRatio": 0.518754725345212,
+    "IbyCRatio": 0.9253497785591837,
+    "infectious_period": 1.17922843495018,
+    "incubation_period": 5,
+    "r0": 0.5970526229197348,
+    "LatentEbyCRatio": {
+      "4/15/20": 0.518754725345212,
+      "4/27/20": 0.07717399825771437
+    },
+    "LatentIbyCRatio": {
+      "4/15/20": 0.9253497785591837,
+      "4/27/20": 0.02268673204433395
+    },
+    "MAPE": 12.963666426755314
+  },
+  "forecast_variables": [
+    "confirmed",
+    "recovered",
+    "deceased"
+  ],
+  "output_filepath": "seir_forecast2.csv"
+}
