@@ -297,10 +297,13 @@ class ModelBuildingSession(BaseModel):
 
         """
         # MLflow configuration
-        mlflow_config = read_file(ModelBuildingSession._ML_FLOW_CONFIG, "json", "dict")
-        mlflow.set_tracking_uri(mlflow_config['tracking_url'])
-        os.environ['MLFLOW_TRACKING_USERNAME'] = mlflow_config['username']
-        os.environ['MLFLOW_TRACKING_PASSWORD'] = mlflow_config['password']
+        try:
+            mlflow_config = read_file(ModelBuildingSession._ML_FLOW_CONFIG, "json", "dict")
+            mlflow.set_tracking_uri(mlflow_config['tracking_url'])
+            os.environ['MLFLOW_TRACKING_USERNAME'] = mlflow_config['username']
+            os.environ['MLFLOW_TRACKING_PASSWORD'] = mlflow_config['password']
+        except FileNotFoundError:
+            print('MLflow configuration not found')
 
         # Official pipeline configuration
         if os.system('source ' + ModelBuildingSession._OFFICIAL_DATA_PIPELINE_CONFIG) != 0:
@@ -492,7 +495,10 @@ class ModelBuildingSession(BaseModel):
 
         """
         outputs = {}
-        outputs['links_df'] = mlflow_logger.get_previous_runs(experiment_name, region_name, interval_to_consider)
+        try:
+            outputs['links_df'] = mlflow_logger.get_previous_runs(experiment_name, region_name, interval_to_consider)
+        except:
+            pass
         return outputs
 
     @staticmethod
@@ -953,6 +959,10 @@ class ModelBuildingSession(BaseModel):
                            input_artifact in params.input_artifacts}
         artifacts_to_log = output_artifacts.dict()
         artifacts_to_log.update(input_artifacts)
-        outputs = mlflow_logger.log_to_mlflow(params, metrics, artifacts_to_log,
-                                              experiment_name=experiment_name, run_name=session_name)
+        outputs = None
+        try:
+            outputs = mlflow_logger.log_to_mlflow(params, metrics, artifacts_to_log,
+                                                  experiment_name=experiment_name, run_name=session_name)
+        except:
+            pass
         return outputs
