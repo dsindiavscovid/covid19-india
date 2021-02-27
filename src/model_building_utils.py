@@ -603,6 +603,7 @@ class ModelBuildingSession(BaseModel):
                                                                                  uncertainty_parameters,
                                                                                  None, "M1_train", output_dir)
         # run the training
+        print('Performing M1 training...')
         M1_train_results = TrainingModule.from_config(deepcopy(M1_train_config))
         # collect all the outputs
 
@@ -635,6 +636,7 @@ class ModelBuildingSession(BaseModel):
         # 3. M2 train step
 
         # generate the config
+        print('Performing M2 training...')
         M2_train_config = ModelBuildingSession._generate_model_operations_config(region_name, region_type, data_source,
                                                                                  input_file_path, time_interval_config,
                                                                                  model_class, model_parameters,
@@ -718,6 +720,7 @@ class ModelBuildingSession(BaseModel):
         df_m1 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_file_path)
         df_m2 = DataFetcherModule.get_actual_smooth_for_region(region_type, region_name, data_source, input_file_path)
 
+        print('Getting M1 forecasts...')
         # M1 train
         if verbose:
             df_predictions_train_m1 = ForecastingModule.flexible_forecast(df_m1["actual"], M1_model_params,
@@ -740,7 +743,7 @@ class ModelBuildingSession(BaseModel):
                                                                      include_best_fit=True)
 
         # Get predictions for M2 train and forecast intervals
-
+        print('Getting M2 forecasts...')
         # M2 train
         if verbose:
             df_predictions_train_m2 = ForecastingModule.flexible_forecast(df_m2["actual"], M2_model_params,
@@ -783,6 +786,7 @@ class ModelBuildingSession(BaseModel):
         df_m2_plot['actual'] = get_observations_subset(df_m2['actual'], plot_start_date_m2, train2_end_date)
         df_m2_plot['smoothed'] = get_observations_subset(df_m2['smoothed'], plot_start_date_m2, train2_end_date)
 
+        print('Creating plots...')
         # Create M1, M2, M2 forecast plots
         m1_plots(region_name_str, df_m1_plot["actual"], df_m1_plot["smoothed"], df_predictions_train_m1,
                  df_predictions_test_m1, train1_start_date, test_start_date, output_artifacts.dict(),
