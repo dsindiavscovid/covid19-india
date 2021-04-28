@@ -4,6 +4,7 @@ from data_fetchers.rootnet_stats_history import RootnetStatsHistory
 from data_fetchers.tracker_data_all import TrackerDataAll
 from data_fetchers.tracker_district_daily import TrackerDistrictDaily
 from data_fetchers.tracker_raw import TrackerRaw
+from data_fetchers.tracker_districts import TrackerDistricts
 from entities.data_source import DataSource
 
 
@@ -23,5 +24,7 @@ class DataFetcherFactory:
             return DirectCSV()
         elif data_source.__eq__(DataSource.tracker_data_all):
             return TrackerDataAll()
+        elif data_source.__eq__(DataSource.tracker_districts):
+            return TrackerDistricts()
         else:
             raise Exception("Data source is not in supported sources.")

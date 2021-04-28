@@ -28,6 +28,7 @@ def smooth_data(df, window_size=3):
 def simple_data_format(df):
     df.drop(columns=['region_name', 'region_type'], inplace=True)
     df = df.set_index('observation').transpose().reset_index()
-    df['index'] = pd.to_datetime(df['index'])
+    if 'index' in df.columns:
+        df['index'] = pd.to_datetime(df['index'])
     df = df.loc[~ (df.select_dtypes(include=['number']) == 0).all(axis='columns'), :]
     return df

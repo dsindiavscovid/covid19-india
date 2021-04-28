@@ -135,22 +135,22 @@ def flatten(d, parent_key='', sep='_'):
     return dict(items)
 
 
-def get_observations_subset(df_actual, start_date=None, end_date=None):
-    df_actual = df_actual.set_index('observation')
-    df_actual = df_actual.transpose().reset_index()
+def get_observations_subset(df, start_date=None, end_date=None):
+    df = df.set_index('observation')
+    df = df.transpose().reset_index()
     if start_date is not None:
-        start = df_actual.index[df_actual['index'] == start_date].tolist()[0]
+        start = df.index[df['index'] == start_date].tolist()[0]
     else:
-        start = df_actual.index.min()
+        start = df.index.min()
     if end_date is not None:
-        end = df_actual.index[df_actual['index'] == end_date].tolist()[0]
+        end = df.index[df['index'] == end_date].tolist()[0]
     else:
-        end = df_actual.index.max()
-    df_actual = df_actual[start: end + 1]
-    df_actual['index'] = pd.to_datetime(df_actual['index'])
-    df_actual.reset_index(inplace=True)
+        end = df.index.max()
+    df = df[start: end + 1]
+    df['index'] = pd.to_datetime(df['index'])
+    df.reset_index(inplace=True)
 
-    return df_actual
+    return df
 
 
 def add_init_observations_to_predictions(df_actual, df_predictions, run_day):
